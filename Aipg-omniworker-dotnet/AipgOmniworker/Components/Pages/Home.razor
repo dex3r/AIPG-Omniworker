@@ -1,0 +1,133 @@
+﻿@page "/"
+@using AipgOmniworker.OmniController
+@rendermode InteractiveServer
+@inject GridWorkerController GridWorkerController
+@inject BridgeConfigManager BridgeConfigManager
+@inject TextWorkerConfigManager TextWorkerConfigManager
+@inject OmniControllerMain OmniControllerMain
+@inject AphroditeController AphroditeController
+
+<PageTitle>Home</PageTitle>
+
+<label for="GridApiKey">Grid Api Key:</label><br/>
+<input type="text" id="GridApiKey" @bind="@GridApiKey" /><br/>
+If you don't have Grid API Key get one from <a href="https://api.aipowergrid.io/register">https://api.aipowergrid.io/register</a><br/>
+<br/>
+<label for="ScribeName">Worker name (publicly visible):</label><br/>
+<input type="text" id="ScribeName" @bind="@WorkerName" /><br/>
+<br/>
+<label for="ModelName">Model Name:</label><br/>
+<input type="text" id="ModelName" @bind="@ModelName" /><br/>
+<br/>
+<label for="HuggingFaceToken">Hugging Face Token:</label><br/>
+<input type="text" id="HuggingFaceToken" @bind="@HuggingFaceToken" /><br/>
+<br/>
+@* <label for="WalletAddress">AIPG Coin Wallet Address:</label><br/> *@
+@* <input type="text" id="WalletAddress" @bind="@WalletAddress" /><br/> *@
+@* Not sure where to get one? Click <a href="https://aipowergrid.io/wallet">here</a><br/> *@
+
+@* Display status *@
+@if (OmniControllerMain.Status)
+{
+    <div class="alert alert-success" role="alert">
+        Worker is running
+    </div>
+}
+else
+{
+    <div class="alert alert-danger" role="alert">
+        Worker is stopped
+    </div>
+}
+
+<button class="btn btn-primary" @onclick="StartGridTextWorker">Save and restart worker</button>
+
+<!-- Disable worker output logs as scrollable readonly text box -->
+<textarea class="form-control" rows="20" readonly>@OmniControllerMain.Output.ToOutputString()</textarea>
+
+<br/>
+Text worker process output:
+<textarea class="form-control" rows="20" readonly>@GridWorkerController.GridTextWorkerOutput.ToOutputString()</textarea>
+
+<br/>
+Aphrodite process output:
+<textarea class="form-control" rows="20" readonly>@AphroditeController.AphroditeOutput.ToOutputString()</textarea>
+
+@code {
+    private string? GridApiKey { get; set; }
+    private string? WorkerName { get; set; }
+    private string? ModelName { get; set; }
+    private string? HuggingFaceToken { get; set; }
+    private string? WalletAddress { get; set; }
+    
+    protected override async Task OnInitializedAsync()
+    {
+        OmniControllerMain.StateChangedEvent += (_, _) => InvokeAsync(StateHasChanged);
+        
+        try
+        {
+            var bridgeConfig = await BridgeConfigManager.LoadConfig();
+            GridApiKey = bridgeConfig.api_key;
+            WorkerName = bridgeConfig.worker_name;
+        }
+        catch (Exception e)
+        {
+            OmniControllerMain.Output.Add(e.ToString());
+        }
+
+        try
+        {
+            var textWorkerConfig = await TextWorkerConfigManager.LoadConfig();
+            ModelName = textWorkerConfig.model_name;
+            HuggingFaceToken = textWorkerConfig.hugging_face_token;
+            
+        }
+        catch (Exception e)
+        {
+            OmniControllerMain.Output.Add(e.ToString());
+        }
+    }
+
+    private async Task StartGridTextWorker()
+    {
+        if (string.IsNullOrWhiteSpace(ModelName))
+        {
+            OmniControllerMain.Output.Add("Model Name is required!");
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(GridApiKey))
+        {
+            OmniControllerMain.Output.Add("Grid API Key is required!");
+            return;
+        }
+        
+        if (string.IsNullOrWhiteSpace(WorkerName))
+        {
+            OmniControllerMain.Output.Add("Worker Name is required!");
+            return;
+        }
+        
+        await ApplyBridgeConfig();
+        await ApplyTextWorkerConfig();
+        await OmniControllerMain.SaveAndRestart();
+    }
+    
+    private async Task ApplyBridgeConfig()
+    {
+        BridgeConfig config = await BridgeConfigManager.LoadConfig();
+        config.api_key = GridApiKey;
+        config.worker_name = WorkerName;
+        config.scribe_name = WorkerName;
+        await BridgeConfigManager.SaveConfig(config);
+    }
+
+    private async Task ApplyTextWorkerConfig()
+    {
+        TextWorkerConfig config = await TextWorkerConfigManager.LoadConfig();
+        config.model_name = ModelName;
+        config.hugging_face_token = HuggingFaceToken;
+        await TextWorkerConfigManager.SaveConfig(config);
+    }
+
+}
