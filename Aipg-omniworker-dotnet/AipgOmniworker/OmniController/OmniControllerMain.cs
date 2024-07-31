@@ -13,19 +13,28 @@ public class OmniControllerMain
     private readonly BridgeConfigManager _bridgeConfigManager;
     private readonly TextWorkerConfigManager _textWorkerConfigManager;
     private readonly AphroditeController _aphroditeController;
+    private readonly ImageWorkerController _imageWorkerController;
 
     public OmniControllerMain(GridWorkerController gridWorkerController, BridgeConfigManager bridgeConfigManager,
-        TextWorkerConfigManager textWorkerConfigManager, AphroditeController aphroditeController)
+        TextWorkerConfigManager textWorkerConfigManager, AphroditeController aphroditeController,
+        ImageWorkerController imageWorkerController)
     {
         _gridWorkerController = gridWorkerController;
         _bridgeConfigManager = bridgeConfigManager;
         _textWorkerConfigManager = textWorkerConfigManager;
         _aphroditeController = aphroditeController;
+        _imageWorkerController = imageWorkerController;
         _gridWorkerController = gridWorkerController;
         _aphroditeController = aphroditeController;
 
         _gridWorkerController.OnGridTextWorkerOutputChangedEvent += OnGridTextWorkerOutputChanged;
         _aphroditeController.OnAphroditeOutputChangedEvent += OnAphroditeOutputChanged;
+        _imageWorkerController.OnOutputChangedEvent += OnImageWorkerOutputChanged;
+    }
+
+    private void OnImageWorkerOutputChanged(object? sender, string e)
+    {
+        StateChangedEvent?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnAphroditeOutputChanged(object? sender, string e)
@@ -42,9 +51,7 @@ public class OmniControllerMain
     {
         try
         {
-            Status = false;
-            await StartGridTextWorkerAsync();
-            Status = true;
+            await StartGridWorkerAsync();
         }
         catch (Exception e)
         {
@@ -53,22 +60,59 @@ public class OmniControllerMain
         }
     }
 
-    private async Task StartGridTextWorkerAsync()
+    private async Task StartGridWorkerAsync()
     {
+        Status = false;
         AddOutput("Stopping worker...");
         _startCancellation?.Cancel();
 
         await _gridWorkerController.KillWorkers();
         await _aphroditeController.KillWorkers();
+        await _imageWorkerController.KillWorkers();
 
         _gridWorkerController.ClearOutput();
         _aphroditeController.ClearOutput();
+        _imageWorkerController.ClearOutput();
         Output.Clear();
 
         AddOutput("Starting worker...");
 
         _startCancellation = new CancellationTokenSource();
+        
+        BridgeConfig bridgeConfig = await _bridgeConfigManager.LoadConfig();
 
+        await StartWorkerBasedOnConfig(bridgeConfig);
+    }
+
+    private async Task StartWorkerBasedOnConfig(BridgeConfig bridgeConfig)
+    {
+        switch (bridgeConfig.worker_type)
+        {
+            case WorkerType.Auto:
+                AddOutput("Worker not started: Auto worker type not supported yet! Please select text or image worker.");
+                break;
+            case WorkerType.Text:
+                await StartTextWorker();
+                break;
+            case WorkerType.Image:
+                await StartImageWorker();
+                break;
+            default:
+                throw new Exception($"Unknown worker type: {bridgeConfig.worker_type}");
+        }
+    }
+
+    private async Task StartImageWorker()
+    {
+        AddOutput("Starting image worker...");
+        await _imageWorkerController.StartImageWorker();
+        
+        AddOutput("Image worker started");
+        Status = true;
+    }
+
+    private async Task StartTextWorker()
+    {
         AddOutput("Starting Aphrodite and downloading model... (this may take a few minutes)");
         await _aphroditeController.StarAphrodite();
 
@@ -85,8 +129,11 @@ public class OmniControllerMain
         AddOutput("Starting Grid Text Worker...");
         await _gridWorkerController.StartGridTextWorker();
         AddOutput("Grid Text Worker started!");
+        Status = true;
     }
     
+    
+
     private void AddOutput(string output)
     {
         Output.Add(output);

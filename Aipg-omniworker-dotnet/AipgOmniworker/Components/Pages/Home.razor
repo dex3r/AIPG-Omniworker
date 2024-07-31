@@ -6,6 +6,8 @@
 @inject TextWorkerConfigManager TextWorkerConfigManager
 @inject OmniControllerMain OmniControllerMain
 @inject AphroditeController AphroditeController
+@inject ImageWorkerController ImageWorkerController
+@inject ImageWorkerConfigManager ImageWorkerConfigManager
 
 <PageTitle>Home</PageTitle>
 
@@ -22,6 +24,15 @@ If you don't have Grid API Key get one from <a href="https://api.aipowergrid.io/
 <label for="HuggingFaceToken">Hugging Face Token:</label><br/>
 <input type="text" id="HuggingFaceToken" @bind="@HuggingFaceToken" /><br/>
 <br/>
+<label for="WorkerType">Worker Type:</label><br/>
+<select id="WorkerType" @bind="@WorkerType">
+    @foreach (WorkerType workerType in Enum.GetValues(typeof(WorkerType)))
+    {
+        <option value="@workerType">@workerType</option>
+    }
+</select>
+<br/>
+
 @* <label for="WalletAddress">AIPG Coin Wallet Address:</label><br/> *@
 @* <input type="text" id="WalletAddress" @bind="@WalletAddress" /><br/> *@
 @* Not sure where to get one? Click <a href="https://aipowergrid.io/wallet">here</a><br/> *@
@@ -53,12 +64,17 @@ Text worker process output:
 Aphrodite process output:
 <textarea class="form-control" rows="20" readonly>@AphroditeController.AphroditeOutput.ToOutputString()</textarea>
 
+<br/>
+Image worker process output:
+<textarea class="form-control" rows="20" readonly>@ImageWorkerController.Output.ToOutputString()</textarea>
+
 @code {
     private string? GridApiKey { get; set; }
     private string? WorkerName { get; set; }
     private string? ModelName { get; set; }
     private string? HuggingFaceToken { get; set; }
     private string? WalletAddress { get; set; }
+    private WorkerType WorkerType { get; set; } = WorkerType.Text;
     
     protected override async Task OnInitializedAsync()
     {
@@ -110,6 +126,7 @@ Aphrodite process output:
         
         await ApplyBridgeConfig();
         await ApplyTextWorkerConfig();
+        await ApplyImageWorkerConfig();
         await OmniControllerMain.SaveAndRestart();
     }
     
@@ -119,6 +136,7 @@ Aphrodite process output:
         config.api_key = GridApiKey;
         config.worker_name = WorkerName;
         config.scribe_name = WorkerName;
+        config.worker_type = WorkerType;
         await BridgeConfigManager.SaveConfig(config);
     }
 
@@ -128,6 +146,17 @@ Aphrodite process output:
         config.model_name = ModelName;
         config.hugging_face_token = HuggingFaceToken;
         await TextWorkerConfigManager.SaveConfig(config);
+    }
+
+    private async Task ApplyImageWorkerConfig()
+    {
+        ImageWorkerConfig config = await ImageWorkerConfigManager.LoadConfig();
+        config.api_key = GridApiKey;
+        config.scribe_name = WorkerName;
+        config.alchemist_name = WorkerName;
+        config.disable_terminal_ui = true;
+        config.dreamer_name = WorkerName;
+        await ImageWorkerConfigManager.SaveConfig(config);
     }
 
 }

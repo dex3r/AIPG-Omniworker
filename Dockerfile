@@ -32,19 +32,25 @@ RUN ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet
 RUN apt-get -y update
 RUN apt-get -y install libicu-dev
 
-# Worker
+# Text Worker
 
 WORKDIR /worker
 
-COPY requirements-scribe.txt .
+COPY grid-text-worker/requirements-scribe.txt .
 
 RUN pip install --break-system-packages --no-cache-dir -r requirements-scribe.txt
 
-COPY .. .
+COPY grid-text-worker/ .
 
 EXPOSE 443
 
 #CMD ["python", "-s", "bridge_scribe.py"]
+
+# Image Worker
+
+WORKDIR /image-worker
+
+COPY image-worker/ .
 
 #USER $APP_UID
 WORKDIR /app

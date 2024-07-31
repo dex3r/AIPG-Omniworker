@@ -8,6 +8,8 @@ builder.Services.AddSingleton<GridWorkerController>();
 builder.Services.AddSingleton<TextWorkerConfigManager>();
 builder.Services.AddSingleton<AphroditeController>();
 builder.Services.AddSingleton<OmniControllerMain>();
+builder.Services.AddSingleton<ImageWorkerConfigManager>();
+builder.Services.AddSingleton<ImageWorkerController>();
 
 // Expose to any address on port 8080
 builder.WebHost.ConfigureKestrel(options =>
