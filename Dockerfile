@@ -52,6 +52,12 @@ WORKDIR /image-worker
 
 COPY image-worker/ .
 RUN chmod +x /image-worker/update-and-run.sh
+RUN apt-get -y install wget
+
+# .sh scripts fail in linux when end of lines are not set to LF
+# This can be solved on git on per-checkout basis, but this is much safer
+RUN apt-get -y install dos2unix
+RUN find . -type f -name "*.sh" -exec dos2unix {} \+;
 
 #USER $APP_UID
 WORKDIR /app
