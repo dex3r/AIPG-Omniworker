@@ -18,6 +18,11 @@ public class ImageWorkerController
         try
         {
             await StartWorkerInternal();
+            
+            if(_workerProcess == null || _workerProcess.HasExited)
+            {
+                throw new Exception("Failed to start image worker");
+            }
         }
         catch (Exception e)
         {
@@ -30,11 +35,30 @@ public class ImageWorkerController
     {
         PrintGridTextWorkerOutput("Starting image worker...");
 
-        await Task.Delay(200);
+        string folderPath = "/image-worker";
+        string scriptPath = "update-and-run.sh";
+        string fullPath = Path.Combine(folderPath, scriptPath);
+        
+        PrintGridTextWorkerOutput($"Checking if script exists at path: {fullPath}");
+        PrintGridTextWorkerOutput($"Actual full path: {Path.GetFullPath(fullPath)}");
+        
+        if(!Directory.Exists(folderPath))
+        {
+            PrintGridTextWorkerOutput($"Script directory not found: {folderPath}");
+            return;
+        }
+        
+        if(!File.Exists(fullPath))
+        {
+            PrintGridTextWorkerOutput($"Script file not found: {scriptPath}");
+            return;
+        }
+        
+        PrintGridTextWorkerOutput($"Script exists confirmed, running at path: {fullPath}");
         
         Process? process = Process.Start(new ProcessStartInfo
         {
-            FileName = "/image-worker/update-and-run.sh",
+            FileName = fullPath,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             WorkingDirectory = WorkingDirectory,

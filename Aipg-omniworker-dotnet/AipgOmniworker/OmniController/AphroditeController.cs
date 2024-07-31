@@ -25,6 +25,11 @@ public class AphroditeController
         try
         {
             await StartAphroditeInternal();
+            
+            if(_aphroditeProcess == null || _aphroditeProcess.HasExited)
+            {
+                throw new Exception("Failed to start Aphrodite");
+            }
         }
         catch (Exception e)
         {

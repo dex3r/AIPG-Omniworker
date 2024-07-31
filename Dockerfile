@@ -51,6 +51,7 @@ EXPOSE 443
 WORKDIR /image-worker
 
 COPY image-worker/ .
+RUN chmod +x /image-worker/update-and-run.sh
 
 #USER $APP_UID
 WORKDIR /app
@@ -71,6 +72,7 @@ ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "AipgOmniworker.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
+USER root
 WORKDIR /app
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "AipgOmniworker.dll"]

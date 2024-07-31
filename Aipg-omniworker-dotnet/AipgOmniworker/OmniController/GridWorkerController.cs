@@ -23,6 +23,11 @@ public class GridWorkerController
         try
         {
             await StartGridTextWorkerInternal();
+            
+            if(_gridTextWorkerProcess == null || _gridTextWorkerProcess.HasExited)
+            {
+                throw new Exception("Failed to start text worker");
+            }
         }
         catch (Exception e)
         {
