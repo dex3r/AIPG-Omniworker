@@ -1,0 +1,3 @@
+[submodule "grid-text-worker"]
+	path = grid-text-worker
+	url = git@github.com:dex3r/grid-text-worker.git
