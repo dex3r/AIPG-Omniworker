@@ -53,6 +53,7 @@ WORKDIR /image-worker
 COPY image-worker/ .
 RUN chmod +x /image-worker/update-and-run.sh
 RUN apt-get -y install wget
+RUN apt-get -y install libgl1
 
 # .sh scripts fail in linux when end of lines are not set to LF
 # This can be solved on git on per-checkout basis, but this is much safer

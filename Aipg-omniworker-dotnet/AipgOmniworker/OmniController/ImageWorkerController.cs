@@ -62,6 +62,7 @@ public class ImageWorkerController
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             WorkingDirectory = WorkingDirectory,
+            Environment = { {"AI_HORDE_URL", "https://api.aipowergrid.io/api/"} }
         });
         
         if (process == null)
