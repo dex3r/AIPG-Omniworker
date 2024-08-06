@@ -1,3 +1,4 @@
+using AipgOmniworker;
 using AipgOmniworker.Components;
 using AipgOmniworker.OmniController;
 using Serilog;
@@ -40,6 +41,11 @@ builder.Services.AddRazorComponents()
 
 var app = builder.Build();
 
+OmniControllerMain workersController = app.Services.GetRequiredService<OmniControllerMain>();
+CancellationTokenSource appClosingToken = new();
+Task workersControllerTask = Task.Run(async () => await workersController.OnAppStarted(appClosingToken.Token),
+    appClosingToken.Token);
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
@@ -56,3 +62,6 @@ app.UseAntiforgery();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 app.Run();
+
+appClosingToken.Cancel();
+await workersControllerTask;

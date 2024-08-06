@@ -31,16 +31,13 @@ public abstract class YamlConfigManager<T>(PersistentStorage persistentStorage, 
         {
             throw new Exception($"Failed to deserialize config from {ConfigPath}");
         }
-
-        if (wasJustCreated)
-        {
-            await OnDefaultConfigCreated(config);
-        }
-
+        
+        await OnConfigLoaded(config);
+        
         return config;
     }
 
-    public virtual Task OnDefaultConfigCreated(T config)
+    public virtual Task OnConfigLoaded(T config)
     {
         return Task.CompletedTask;
     }

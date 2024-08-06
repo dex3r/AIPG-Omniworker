@@ -103,7 +103,7 @@ Image worker process output:
         await SaveUserConfig();
     }
 
-    private async Task SaveUserConfig()
+    private async Task SaveUserConfig(bool? setAutostart = null)
     {
         try
         {
@@ -113,6 +113,12 @@ Image worker process output:
             userConfig.TextModelName = ModelName;
             userConfig.HuggingFaceToken = HuggingFaceToken;
             userConfig.WorkerType = WorkerType;
+            
+            if (setAutostart.HasValue)
+            {
+                userConfig.AutoStartWorker = setAutostart.Value;
+            }
+            
             await UserConfigManager.SaveConfig(userConfig);
         }
         catch (Exception e)
@@ -130,52 +136,21 @@ Image worker process output:
             OmniControllerMain.Output.Add("Model Name is required!");
             return;
         }
-        
+
         if (string.IsNullOrWhiteSpace(GridApiKey))
         {
             OmniControllerMain.Output.Add("Grid API Key is required!");
             return;
         }
-        
+
         if (string.IsNullOrWhiteSpace(WorkerName))
         {
             OmniControllerMain.Output.Add("Worker Name is required!");
             return;
         }
 
-        await SaveUserConfig();
-        await ApplyBridgeConfig();
-        await ApplyTextWorkerConfig();
-        await ApplyImageWorkerConfig();
+        await SaveUserConfig(true);
+        await OmniControllerMain.ApplyUserConfigsToWorkers();
         await OmniControllerMain.SaveAndRestart();
     }
-    
-    private async Task ApplyBridgeConfig()
-    {
-        BridgeConfig config = await BridgeConfigManager.LoadConfig();
-        config.api_key = GridApiKey;
-        config.worker_name = WorkerName;
-        config.scribe_name = WorkerName;
-        await BridgeConfigManager.SaveConfig(config);
-    }
-
-    private async Task ApplyTextWorkerConfig()
-    {
-        TextWorkerConfig config = await TextWorkerConfigManager.LoadConfig();
-        config.model_name = ModelName;
-        config.hugging_face_token = HuggingFaceToken;
-        await TextWorkerConfigManager.SaveConfig(config);
-    }
-
-    private async Task ApplyImageWorkerConfig()
-    {
-        ImageWorkerConfig config = await ImageWorkerConfigManager.LoadConfig();
-        config.api_key = GridApiKey;
-        config.scribe_name = WorkerName;
-        config.alchemist_name = WorkerName;
-        config.disable_terminal_ui = true;
-        config.dreamer_name = WorkerName;
-        await ImageWorkerConfigManager.SaveConfig(config);
-    }
-
 }

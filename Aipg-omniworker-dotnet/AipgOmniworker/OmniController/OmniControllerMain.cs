@@ -17,15 +17,24 @@ public class OmniControllerMain
     private readonly ImageWorkerController _imageWorkerController;
     private readonly ILogger<OmniControllerMain> _logger;
     private readonly UserConfigManager _userConfigManager;
+    private readonly TextWorkerConfigManager _textWorkerConfigManager;
+    private readonly ImageWorkerConfigManager _imageWorkerConfigManager;
+    private readonly BridgeConfigManager _bridgeConfigManager;
+    private CancellationToken? _appClosingToken;
 
     public OmniControllerMain(GridWorkerController gridWorkerController, AphroditeController aphroditeController,
-        ImageWorkerController imageWorkerController, ILogger<OmniControllerMain> logger, UserConfigManager userConfigManager)
+        ImageWorkerController imageWorkerController, ILogger<OmniControllerMain> logger, UserConfigManager userConfigManager,
+        TextWorkerConfigManager textWorkerConfigManager, ImageWorkerConfigManager imageWorkerConfigManager,
+        BridgeConfigManager bridgeConfigManager)
     {
         _gridWorkerController = gridWorkerController;
         _aphroditeController = aphroditeController;
         _imageWorkerController = imageWorkerController;
         _logger = logger;
         _userConfigManager = userConfigManager;
+        _textWorkerConfigManager = textWorkerConfigManager;
+        _imageWorkerConfigManager = imageWorkerConfigManager;
+        _bridgeConfigManager = bridgeConfigManager;
         _gridWorkerController = gridWorkerController;
         _aphroditeController = aphroditeController;
 
@@ -34,6 +43,24 @@ public class OmniControllerMain
         _imageWorkerController.OnOutputChangedEvent += OnImageWorkerOutputChanged;
     }
 
+    public async Task OnAppStarted(CancellationToken appClosing)
+    {
+        _appClosingToken = appClosing;
+        appClosing.Register(() =>
+        {
+            Task stopWorkersTask = Task.Run(StopWorkers);
+            stopWorkersTask.Wait(TimeSpan.FromSeconds(5));
+        });
+        
+        UserConfig userConfig = await _userConfigManager.LoadConfig();
+        
+        if (userConfig.AutoStartWorker)
+        {
+            await ApplyUserConfigsToWorkers();
+            await StartGridWorkerAsync();
+        }
+    }
+    
     private void OnImageWorkerOutputChanged(object? sender, string e)
     {
         StateChangedEvent?.Invoke(this, EventArgs.Empty);
@@ -49,6 +76,40 @@ public class OmniControllerMain
         StateChangedEvent?.Invoke(this, EventArgs.Empty);
     }
 
+    public async Task ApplyUserConfigsToWorkers()
+    {
+        UserConfig userConfig = await _userConfigManager.LoadConfig();
+
+        if (string.IsNullOrWhiteSpace(userConfig.ApiKey))
+        {
+            throw new Exception("API Key not provided");
+        }
+        
+        if (string.IsNullOrWhiteSpace(userConfig.WorkerName))
+        {
+            throw new Exception("Worker name not provided");
+        }
+        
+        BridgeConfig bridgeConfig = await _bridgeConfigManager.LoadConfig();
+        bridgeConfig.api_key = userConfig.ApiKey;
+        bridgeConfig.worker_name = userConfig.WorkerName;
+        bridgeConfig.scribe_name = userConfig.WorkerName;
+        await _bridgeConfigManager.SaveConfig(bridgeConfig);
+        
+        TextWorkerConfig textWorkerConfig = await _textWorkerConfigManager.LoadConfig();
+        textWorkerConfig.model_name = userConfig.TextModelName;
+        textWorkerConfig.hugging_face_token = userConfig.HuggingFaceToken;
+        await _textWorkerConfigManager.SaveConfig(textWorkerConfig);
+        
+        ImageWorkerConfig imageWorkerConfig = await _imageWorkerConfigManager.LoadConfig();
+        imageWorkerConfig.api_key = userConfig.ApiKey;
+        imageWorkerConfig.scribe_name = userConfig.WorkerName;
+        imageWorkerConfig.alchemist_name = userConfig.WorkerName;
+        imageWorkerConfig.disable_terminal_ui = true;
+        imageWorkerConfig.dreamer_name = userConfig.WorkerName;
+        await _imageWorkerConfigManager.SaveConfig(imageWorkerConfig);
+    }
+    
     public async Task SaveAndRestart()
     {
         try
@@ -65,13 +126,7 @@ public class OmniControllerMain
 
     private async Task StartGridWorkerAsync()
     {
-        Status = false;
-        AddOutput("Stopping worker...");
-        _startCancellation?.Cancel();
-
-        await _gridWorkerController.KillWorkers();
-        await _aphroditeController.KillWorkers();
-        await _imageWorkerController.KillWorkers();
+        await StopWorkers();
 
         _gridWorkerController.ClearOutput();
         _aphroditeController.ClearOutput();
@@ -85,6 +140,17 @@ public class OmniControllerMain
         UserConfig userConfig = await _userConfigManager.LoadConfig();
 
         await StartWorkerBasedOnType(userConfig.WorkerType);
+    }
+
+    public async Task StopWorkers()
+    {
+        Status = false;
+        AddOutput("Stopping workers...");
+        _startCancellation?.Cancel();
+
+        await _gridWorkerController.KillWorkers();
+        await _aphroditeController.KillWorkers();
+        await _imageWorkerController.KillWorkers();
     }
 
     private async Task StartWorkerBasedOnType(WorkerType workerType)

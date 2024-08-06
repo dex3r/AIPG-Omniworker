@@ -10,4 +10,5 @@ public class UserConfig
     public string? TextModelName { get; set; } = "TheBloke/Mistral-7B-v0.1-GPTQ";
     public string? HuggingFaceToken { get; set; }
     public WorkerType WorkerType { get; set; } = WorkerType.Auto;
+    public bool AutoStartWorker { get; set; }
 }
