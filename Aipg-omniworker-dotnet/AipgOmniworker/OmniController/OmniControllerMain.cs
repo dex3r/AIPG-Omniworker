@@ -56,8 +56,13 @@ public class OmniControllerMain
         
         if (userConfig.AutoStartWorker)
         {
+            _logger.LogInformation("Auto starting worker...");
             await ApplyUserConfigsToWorkers();
             await StartGridWorkerAsync();
+        }
+        else
+        {
+            _logger.LogInformation("Auto start worker is disabled");
         }
     }
     

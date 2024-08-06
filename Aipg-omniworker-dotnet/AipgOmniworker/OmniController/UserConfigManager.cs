@@ -21,7 +21,7 @@ public class UserConfigManager(PersistentStorage persistentStorage, ILogger<User
 
         if (Environment.GetEnvironmentVariable("WORKER_TYPE") != null)
         {
-            if (Enum.TryParse(Environment.GetEnvironmentVariable("WORKER_TYPE"), out WorkerType configWorkerType))
+            if (Enum.TryParse(Environment.GetEnvironmentVariable("WORKER_TYPE"), true, out WorkerType configWorkerType))
             {
                 config.WorkerType = configWorkerType;
             }
