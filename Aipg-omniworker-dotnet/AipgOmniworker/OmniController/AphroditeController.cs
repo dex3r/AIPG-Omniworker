@@ -13,11 +13,13 @@ public class AphroditeController
     public string WorkingDirectory => "/worker";
 
     private readonly TextWorkerConfigManager _textWorkerConfigManager;
+    private readonly ILogger<AphroditeController> _logger;
     private Process? _aphroditeProcess;
 
-    public AphroditeController(TextWorkerConfigManager textWorkerConfigManager)
+    public AphroditeController(TextWorkerConfigManager textWorkerConfigManager, ILogger<AphroditeController> logger)
     {
         _textWorkerConfigManager = textWorkerConfigManager;
+        _logger = logger;
     }
 
     public async Task StarAphrodite()
@@ -80,7 +82,8 @@ public class AphroditeController
             Arguments = $"-m aphrodite.endpoints.openai.api_server" +
                         $" --model {ModelName}" +
                         $" --gpu-memory-utilization {gpu_utilization}" +
-                        $" --launch-kobold-api",
+                        $" --launch-kobold-api" +
+                        $" --download-dir /persistent/aphrodite/models/",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             //UseShellExecute = false,
@@ -121,7 +124,8 @@ public class AphroditeController
     {
         output = new Regex(@"\x1B\[[^@-~]*[@-~]").Replace(output, "");
         AphroditeOutput.Add(output);
-
+        _logger.LogInformation(output);
+        
         try
         {
             OnAphroditeOutputChangedEvent?.Invoke(this, output);

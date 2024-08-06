@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace AipgOmniworker.OmniController;
 
-public class ImageWorkerController
+public class ImageWorkerController(ILogger<ImageWorkerController> logger)
 {
     public List<string> Output { get; private set; } = new();
 
@@ -102,6 +102,7 @@ public class ImageWorkerController
     {
         output =  new Regex(@"\x1B\[[^@-~]*[@-~]").Replace(output, "");
         Output.Add(output);
+        logger.LogInformation(output);
 
         try
         {

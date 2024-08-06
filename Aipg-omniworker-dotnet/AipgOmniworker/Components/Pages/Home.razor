@@ -8,6 +8,8 @@
 @inject AphroditeController AphroditeController
 @inject ImageWorkerController ImageWorkerController
 @inject ImageWorkerConfigManager ImageWorkerConfigManager
+@inject UserConfigManager UserConfigManager
+@inject ILogger<Home> logger
 
 <PageTitle>Home</PageTitle>
 
@@ -18,7 +20,7 @@ If you don't have Grid API Key get one from <a href="https://api.aipowergrid.io/
 <label for="ScribeName">Worker name (publicly visible):</label><br/>
 <input type="text" id="ScribeName" @bind="@WorkerName" /><br/>
 <br/>
-<label for="ModelName">Model Name:</label><br/>
+<label for="ModelName">Text model Name:</label><br/>
 <input type="text" id="ModelName" @bind="@ModelName" /><br/>
 <br/>
 <label for="HuggingFaceToken">Hugging Face Token:</label><br/>
@@ -74,33 +76,50 @@ Image worker process output:
     private string? ModelName { get; set; }
     private string? HuggingFaceToken { get; set; }
     private string? WalletAddress { get; set; }
-    private WorkerType WorkerType { get; set; } = WorkerType.Text;
+    private WorkerType WorkerType { get; set; } = WorkerType.Auto;
     
     protected override async Task OnInitializedAsync()
     {
         OmniControllerMain.StateChangedEvent += (_, _) => InvokeAsync(StateHasChanged);
-        
-        try
-        {
-            var bridgeConfig = await BridgeConfigManager.LoadConfig();
-            GridApiKey = bridgeConfig.api_key;
-            WorkerName = bridgeConfig.worker_name;
-        }
-        catch (Exception e)
-        {
-            OmniControllerMain.Output.Add(e.ToString());
-        }
 
         try
         {
-            var textWorkerConfig = await TextWorkerConfigManager.LoadConfig();
-            ModelName = textWorkerConfig.model_name;
-            HuggingFaceToken = textWorkerConfig.hugging_face_token;
-            
+            var userConfig = await UserConfigManager.LoadConfig();
+            GridApiKey = userConfig.ApiKey;
+            WorkerName = userConfig.WorkerName;
+            ModelName = userConfig.TextModelName;
+            HuggingFaceToken = userConfig.HuggingFaceToken;
+            WorkerType = userConfig.WorkerType;
         }
         catch (Exception e)
         {
             OmniControllerMain.Output.Add(e.ToString());
+            logger.LogError(e, "Failed to load user config");
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await SaveUserConfig();
+    }
+
+    private async Task SaveUserConfig()
+    {
+        try
+        {
+            UserConfig userConfig = await UserConfigManager.LoadConfig();
+            userConfig.ApiKey = GridApiKey;
+            userConfig.WorkerName = WorkerName;
+            userConfig.TextModelName = ModelName;
+            userConfig.HuggingFaceToken = HuggingFaceToken;
+            userConfig.WorkerType = WorkerType;
+            await UserConfigManager.SaveConfig(userConfig);
+        }
+        catch (Exception e)
+        {
+            OmniControllerMain.Output.Add("Failed to save user config");
+            OmniControllerMain.Output.Add(e.ToString());
+            logger.LogError(e, "Failed to save user config");
         }
     }
 
@@ -123,7 +142,8 @@ Image worker process output:
             OmniControllerMain.Output.Add("Worker Name is required!");
             return;
         }
-        
+
+        await SaveUserConfig();
         await ApplyBridgeConfig();
         await ApplyTextWorkerConfig();
         await ApplyImageWorkerConfig();
@@ -136,7 +156,6 @@ Image worker process output:
         config.api_key = GridApiKey;
         config.worker_name = WorkerName;
         config.scribe_name = WorkerName;
-        config.worker_type = WorkerType;
         await BridgeConfigManager.SaveConfig(config);
     }
 

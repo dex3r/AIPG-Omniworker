@@ -5,7 +5,7 @@ This repository allows you to set up a AIPG Worker.
 ## Windows
 
 1. Install Docker if not installer already https://www.docker.com/products/docker-desktop/
-1. Run this command: `(docker rm -f aipg-omniworker || ver > nul) && docker run -d -p 7870:8080 --gpus "all" --shm-size 8g --name aipg-omniworker dex3r/aipg-omniworker`
+1. Run this command: `(docker rm -f aipg-omniworker || ver > nul) && docker run -d -p 7870:8080 --gpus "all" --shm-size 8g --mount source=aipg-omniworker-volume,target=/persistent --name aipg-omniworker dex3r/aipg-omniworker`
 1. Go to http://localhost:7870/ and follow the instructions
 
 ## Linux

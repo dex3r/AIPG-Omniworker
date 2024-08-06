@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace AipgOmniworker.OmniController;
 
-public class GridWorkerController
+public class GridWorkerController(ILogger<GridWorkerController> logger)
 {
     public List<string> GridTextWorkerOutput { get; private set; } = new();
 
@@ -12,11 +12,6 @@ public class GridWorkerController
     public string WorkingDirectory => "/worker";
     
     private Process? _gridTextWorkerProcess;
-    
-    
-    public async Task Initialize()
-    {
-    }
 
     public async Task StartGridTextWorker()
     {
@@ -91,6 +86,7 @@ public class GridWorkerController
     {
         output =  new Regex(@"\x1B\[[^@-~]*[@-~]").Replace(output, "");
         GridTextWorkerOutput.Add(output);
+        logger.LogInformation(output);
 
         try
         {

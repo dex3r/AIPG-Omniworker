@@ -1,4 +1,7 @@
-﻿namespace AipgOmniworker.OmniController;
+﻿using System.Diagnostics;
+using Newtonsoft.Json;
+
+namespace AipgOmniworker.OmniController;
 
 public class OmniControllerMain
 {
@@ -8,22 +11,21 @@ public class OmniControllerMain
 
     public event EventHandler? StateChangedEvent;
 
-    private CancellationTokenSource _startCancellation;
+    private CancellationTokenSource? _startCancellation;
     private readonly GridWorkerController _gridWorkerController;
-    private readonly BridgeConfigManager _bridgeConfigManager;
-    private readonly TextWorkerConfigManager _textWorkerConfigManager;
     private readonly AphroditeController _aphroditeController;
     private readonly ImageWorkerController _imageWorkerController;
+    private readonly ILogger<OmniControllerMain> _logger;
+    private readonly UserConfigManager _userConfigManager;
 
-    public OmniControllerMain(GridWorkerController gridWorkerController, BridgeConfigManager bridgeConfigManager,
-        TextWorkerConfigManager textWorkerConfigManager, AphroditeController aphroditeController,
-        ImageWorkerController imageWorkerController)
+    public OmniControllerMain(GridWorkerController gridWorkerController, AphroditeController aphroditeController,
+        ImageWorkerController imageWorkerController, ILogger<OmniControllerMain> logger, UserConfigManager userConfigManager)
     {
         _gridWorkerController = gridWorkerController;
-        _bridgeConfigManager = bridgeConfigManager;
-        _textWorkerConfigManager = textWorkerConfigManager;
         _aphroditeController = aphroditeController;
         _imageWorkerController = imageWorkerController;
+        _logger = logger;
+        _userConfigManager = userConfigManager;
         _gridWorkerController = gridWorkerController;
         _aphroditeController = aphroditeController;
 
@@ -55,6 +57,7 @@ public class OmniControllerMain
         }
         catch (Exception e)
         {
+            _logger.LogError(e, "Failed to save and restart");
             AddOutput(e.ToString());
             Status = false;
         }
@@ -78,18 +81,18 @@ public class OmniControllerMain
         AddOutput("Starting worker...");
 
         _startCancellation = new CancellationTokenSource();
-        
-        BridgeConfig bridgeConfig = await _bridgeConfigManager.LoadConfig();
 
-        await StartWorkerBasedOnConfig(bridgeConfig);
+        UserConfig userConfig = await _userConfigManager.LoadConfig();
+
+        await StartWorkerBasedOnType(userConfig.WorkerType);
     }
 
-    private async Task StartWorkerBasedOnConfig(BridgeConfig bridgeConfig)
+    private async Task StartWorkerBasedOnType(WorkerType workerType)
     {
-        switch (bridgeConfig.worker_type)
+        switch (workerType)
         {
             case WorkerType.Auto:
-                AddOutput("Worker not started: Auto worker type not supported yet! Please select text or image worker.");
+                await StartWorkerAutoSelect();
                 break;
             case WorkerType.Text:
                 await StartTextWorker();
@@ -98,8 +101,70 @@ public class OmniControllerMain
                 await StartImageWorker();
                 break;
             default:
-                throw new Exception($"Unknown worker type: {bridgeConfig.worker_type}");
+                throw new Exception($"Unknown worker type: {workerType}");
         }
+    }
+
+    private async Task StartWorkerAutoSelect()
+    {
+        WorkerType workerType = await FetchAutoPreferredWorkerType();
+
+        if (workerType == WorkerType.Auto)
+        {
+            throw new Exception("Auto worker type value cannot be Auto itself");
+        }
+        
+        await StartWorkerBasedOnType(workerType);
+    }
+    
+    private async Task<WorkerType> FetchAutoPreferredWorkerType()
+    {
+        AddOutput("Fetching workers info to determine Auto worker type...");
+        WorkerInfo[] workers = await GetWorkersInfo();
+        
+        int imageWorkerCount = workers.Count(w => w.type == "image");
+        int textWorkerCount = workers.Count(w => w.type == "text");
+        
+        AddOutput($"Image worker count: {imageWorkerCount} Text worker count: {textWorkerCount}");
+        
+        if (imageWorkerCount == textWorkerCount)
+        {
+            AddOutput("Both worker types have equal count, selecting Text worker type");
+            return WorkerType.Text;
+        }
+
+        if (imageWorkerCount > textWorkerCount)
+        {
+            AddOutput("There are currently more Image workers than Text workers, so starting Text worker");
+            return WorkerType.Text;
+        }
+        else
+        {
+            AddOutput("There are currently more Text workers than Image workers, so starting Image worker");
+            return WorkerType.Image;
+        }
+    }
+
+    private async Task<WorkerInfo[]> GetWorkersInfo()
+    {
+        // Get array of WorkerInfo from https://api.aipowergrid.io/api/v2/workers
+        
+        using var client = new HttpClient();
+        HttpResponseMessage response = await client.GetAsync("https://api.aipowergrid.io/api/v2/workers");
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new Exception("Failed to get workers info");
+        }
+        
+        string json = await response.Content.ReadAsStringAsync();
+        WorkerInfo[] workers = JsonConvert.DeserializeObject<WorkerInfo[]>(json);
+        if (workers == null)
+        {
+            throw new Exception("Failed to parse workers info");
+        }
+        
+        return workers;
     }
 
     private async Task StartImageWorker()
@@ -136,6 +201,7 @@ public class OmniControllerMain
 
     private void AddOutput(string output)
     {
+        _logger.LogInformation(output);
         Output.Add(output);
         StateChangedEvent?.Invoke(this, EventArgs.Empty);
     }

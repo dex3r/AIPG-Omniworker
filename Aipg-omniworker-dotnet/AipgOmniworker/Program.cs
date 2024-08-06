@@ -1,5 +1,7 @@
 using AipgOmniworker.Components;
 using AipgOmniworker.OmniController;
+using Serilog;
+using Serilog.Exceptions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +12,21 @@ builder.Services.AddSingleton<AphroditeController>();
 builder.Services.AddSingleton<OmniControllerMain>();
 builder.Services.AddSingleton<ImageWorkerConfigManager>();
 builder.Services.AddSingleton<ImageWorkerController>();
+builder.Services.AddSingleton<PersistentStorage>();
+builder.Services.AddSingleton<UserConfigManager>();
+
+builder.Logging.ClearProviders();
+
+Log.Logger = new LoggerConfiguration()
+    .Enrich.WithExceptionDetails()
+    .WriteTo.Console()
+    .WriteTo.File("/persistent/logs/omniworker.log", 
+        rollingInterval: RollingInterval.Day,
+        rollOnFileSizeLimit: true,
+        fileSizeLimitBytes: 100000000) // 100 MB
+    .CreateLogger();
+
+builder.Services.AddSerilog();
 
 // Expose to any address on port 8080
 builder.WebHost.ConfigureKestrel(options =>
@@ -36,7 +53,6 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 app.Run();

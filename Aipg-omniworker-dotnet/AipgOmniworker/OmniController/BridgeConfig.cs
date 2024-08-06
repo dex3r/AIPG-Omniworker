@@ -15,5 +15,4 @@ public class BridgeConfig
     public string kai_url { get; set; }
     public int max_length { get; set; }
     public int max_context_length { get; set; }
-    public WorkerType worker_type { get; set; }
 }
