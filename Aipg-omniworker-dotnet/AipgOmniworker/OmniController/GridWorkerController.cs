@@ -84,6 +84,11 @@ public class GridWorkerController(ILogger<GridWorkerController> logger)
     
     private void PrintGridTextWorkerOutput(string output)
     {
+        if (GridTextWorkerOutput.Count > 10000)
+        {
+            GridTextWorkerOutput.RemoveAt(0);
+        }
+        
         output =  new Regex(@"\x1B\[[^@-~]*[@-~]").Replace(output, "");
         GridTextWorkerOutput.Add(output);
         logger.LogInformation(output);
@@ -121,5 +126,10 @@ public class GridWorkerController(ILogger<GridWorkerController> logger)
     public void ClearOutput()
     {
         GridTextWorkerOutput.Clear();
+    }
+
+    public async Task<bool> IsRunning()
+    {
+        return _gridTextWorkerProcess != null && !_gridTextWorkerProcess.HasExited;
     }
 }

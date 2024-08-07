@@ -16,6 +16,8 @@ public class AphroditeController
     private readonly ILogger<AphroditeController> _logger;
     private Process? _aphroditeProcess;
 
+    private readonly string _address = "http://localhost:2242";
+    
     public AphroditeController(TextWorkerConfigManager textWorkerConfigManager, ILogger<AphroditeController> logger)
     {
         _textWorkerConfigManager = textWorkerConfigManager;
@@ -27,8 +29,8 @@ public class AphroditeController
         try
         {
             await StartAphroditeInternal();
-            
-            if(_aphroditeProcess == null || _aphroditeProcess.HasExited)
+
+            if (_aphroditeProcess == null || _aphroditeProcess.HasExited)
             {
                 throw new Exception("Failed to start Aphrodite");
             }
@@ -42,16 +44,19 @@ public class AphroditeController
 
     public async Task<bool> WaitForAphriditeToStart(CancellationToken cancellationToken)
     {
-        string address = "http://localhost:2242";
-
         while (!cancellationToken.IsCancellationRequested)
         {
             await Task.Delay(100, cancellationToken);
 
+            if (_aphroditeProcess == null || _aphroditeProcess.HasExited)
+            {
+                return false;
+            }
+
             try
             {
                 using HttpClient client = new HttpClient();
-                HttpResponseMessage response = await client.GetAsync(address);
+                HttpResponseMessage response = await client.GetAsync(_address);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -73,8 +78,7 @@ public class AphroditeController
         var textWorkerConfig = await _textWorkerConfigManager.LoadConfig();
         string ModelName = textWorkerConfig.model_name;
         string HuggingFaceToken = textWorkerConfig.hugging_face_token;
-        string gpu_utilization = textWorkerConfig.gpu_utilization.ToString(CultureInfo.InvariantCulture).
-            Replace(",", ".");
+        string gpu_utilization = textWorkerConfig.gpu_utilization.ToString(CultureInfo.InvariantCulture).Replace(",", ".");
 
         Process? process = Process.Start(new ProcessStartInfo
         {
@@ -122,10 +126,15 @@ public class AphroditeController
 
     private void PrintGridTextWorkerOutput(string output)
     {
+        if (AphroditeOutput.Count > 10000)
+        {
+            AphroditeOutput.RemoveAt(0);
+        }
+        
         output = new Regex(@"\x1B\[[^@-~]*[@-~]").Replace(output, "");
         AphroditeOutput.Add(output);
         _logger.LogInformation(output);
-        
+
         try
         {
             OnAphroditeOutputChangedEvent?.Invoke(this, output);
@@ -159,5 +168,31 @@ public class AphroditeController
     public void ClearOutput()
     {
         AphroditeOutput.Clear();
+    }
+
+    public async Task<bool> IsRunning()
+    {
+        bool isProcessAlive = _aphroditeProcess != null && !_aphroditeProcess.HasExited;
+
+        if (!isProcessAlive)
+        {
+            return false;
+        }
+        
+        try
+        {
+            using HttpClient client = new HttpClient();
+            HttpResponseMessage response = await client.GetAsync(_address);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return true;
+            }
+        }
+        catch
+        {
+        }
+
+        return false;
     }
 }

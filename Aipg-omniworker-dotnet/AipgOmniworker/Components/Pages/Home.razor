@@ -40,20 +40,28 @@ If you don't have Grid API Key get one from <a href="https://api.aipowergrid.io/
 @* Not sure where to get one? Click <a href="https://aipowergrid.io/wallet">here</a><br/> *@
 
 @* Display status *@
-@if (OmniControllerMain.Status)
+@switch(OmniControllerMain.Status)
 {
-    <div class="alert alert-success" role="alert">
-        Worker is running
-    </div>
-}
-else
-{
-    <div class="alert alert-danger" role="alert">
-        Worker is stopped
-    </div>
+    case WorkerStatus.Running:
+        <div class="alert alert-success" role="alert">
+            Worker is running
+        </div>
+        break;
+    case WorkerStatus.Stopped:
+        <div class="alert alert-danger" role="alert">
+            Worker is stopped
+        </div>
+        break;
+    case WorkerStatus.Starting:
+    case WorkerStatus.Stopping:
+        <div class="alert alert-warning" role="alert">
+            Worker is @OmniControllerMain.Status
+        </div>
+        break;
 }
 
-<button class="btn btn-primary" @onclick="StartGridTextWorker">Save and restart worker</button>
+<button class="btn btn-primary" @onclick="StartWorkers">Save and restart worker</button>
+<button class="btn btn-primary" @onclick="StopWorkers">Stop worker</button>
 
 <!-- Disable worker output logs as scrollable readonly text box -->
 <textarea class="form-control" rows="20" readonly>@OmniControllerMain.Output.ToOutputString()</textarea>
@@ -129,7 +137,7 @@ Image worker process output:
         }
     }
 
-    private async Task StartGridTextWorker()
+    private async Task StartWorkers()
     {
         if (string.IsNullOrWhiteSpace(ModelName))
         {
@@ -152,5 +160,10 @@ Image worker process output:
         await SaveUserConfig(true);
         await OmniControllerMain.ApplyUserConfigsToWorkers();
         await OmniControllerMain.SaveAndRestart();
+    }
+
+    private async Task StopWorkers()
+    {
+        await OmniControllerMain.StopWorkers();
     }
 }

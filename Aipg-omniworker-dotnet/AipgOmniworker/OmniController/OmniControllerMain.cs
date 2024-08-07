@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 
 namespace AipgOmniworker.OmniController;
 
@@ -7,7 +6,7 @@ public class OmniControllerMain
 {
     public List<string> Output { get; } = new();
 
-    public bool Status { get; private set; }
+    public WorkerStatus Status { get; private set; }
 
     public event EventHandler? StateChangedEvent;
 
@@ -125,13 +124,21 @@ public class OmniControllerMain
         {
             _logger.LogError(e, "Failed to save and restart");
             AddOutput(e.ToString());
-            Status = false;
+            
+            if(Status != WorkerStatus.Stopping && Status != WorkerStatus.Stopped)
+            {
+                await StopWorkers();
+                Status = WorkerStatus.Stopped;
+            }
         }
     }
 
     private async Task StartGridWorkerAsync()
     {
-        await StopWorkers();
+        if(Status != WorkerStatus.Stopping && Status != WorkerStatus.Stopped)
+        {
+            await StopWorkers();
+        }
 
         _gridWorkerController.ClearOutput();
         _aphroditeController.ClearOutput();
@@ -139,44 +146,144 @@ public class OmniControllerMain
         Output.Clear();
 
         AddOutput("Starting worker...");
+        Status = WorkerStatus.Starting;
 
+        if(_startCancellation != null)
+        {
+            await _startCancellation.CancelAsync();
+        }
         _startCancellation = new CancellationTokenSource();
+        
+        CancellationToken token = _startCancellation.Token;
 
         UserConfig userConfig = await _userConfigManager.LoadConfig();
 
-        await StartWorkerBasedOnType(userConfig.WorkerType);
+        WorkerType workerType = await StartWorkerBasedOnType(userConfig.WorkerType);
+        
+        if(Status == WorkerStatus.Running || Status == WorkerStatus.Starting)
+        {
+            Task.Run(async () => await WatchdogMethod(workerType, token));
+        }
+    }
+
+    private async Task WatchdogMethod(WorkerType workerType, CancellationToken stoppingToken)
+    {
+        DateTime startTime = DateTime.Now;
+        TimeSpan maxRunTime = TimeSpan.FromHours(1);
+        
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+
+            if (Status != WorkerStatus.Running)
+            {
+                continue;
+            }
+            
+            if(DateTime.Now - startTime > maxRunTime)
+            {
+                AddOutput($"Worker has been running for {maxRunTime.ToString()}, restarting...");
+                SaveAndRestart();
+                return;
+            }
+
+            if (workerType == WorkerType.Text)
+            {
+                if(!await _gridWorkerController.IsRunning()
+                   || !await _aphroditeController.IsRunning())
+                {
+                    AddOutput("Grid Text Worker is not running, restarting...");
+                    RestartSilentWithDelay();
+                    return;
+                }
+            }
+            else if (workerType == WorkerType.Image)
+            {
+                if(!await _imageWorkerController.IsRunning())
+                {
+                    AddOutput("Image Worker is not running, restarting...");
+                    RestartSilentWithDelay();
+                    return;
+                }
+            }
+        }
+    }
+
+    private async Task RestartSilentWithDelay()
+    {
+        await Task.Delay(TimeSpan.FromSeconds(10));
+
+        await SaveAndRestart();
     }
 
     public async Task StopWorkers()
     {
-        Status = false;
+        if (Status == WorkerStatus.Starting)
+        {
+            AddOutput("Workers are starting, cancelling and force stopping");
+        }
+        
+        Status = WorkerStatus.Stopping;
         AddOutput("Stopping workers...");
-        _startCancellation?.Cancel();
 
-        await _gridWorkerController.KillWorkers();
-        await _aphroditeController.KillWorkers();
-        await _imageWorkerController.KillWorkers();
+        if (_startCancellation != null)
+        {
+            await _startCancellation.CancelAsync();
+        }
+
+        try
+        {
+            await _gridWorkerController.KillWorkers();
+        }
+        catch (Exception e)
+        {
+            AddOutput("Exception while stopping Grid Text Worker");
+            AddOutput(e.ToString());
+        }
+
+        try
+        {
+            await _aphroditeController.KillWorkers();
+        }
+        catch (Exception e)
+        {
+            AddOutput("Exception while stopping Aphrodite");
+            AddOutput(e.ToString());
+        }
+
+        try
+        {
+            await _imageWorkerController.KillWorkers();
+        }
+        catch (Exception e)
+        {
+            AddOutput("Exception while stopping Image Worker");
+            AddOutput(e.ToString());
+        }
+
+        AddOutput("Workers stopped!");
+        Status = WorkerStatus.Stopped;
     }
 
-    private async Task StartWorkerBasedOnType(WorkerType workerType)
+    private async Task<WorkerType> StartWorkerBasedOnType(WorkerType workerType)
     {
         switch (workerType)
         {
             case WorkerType.Auto:
-                await StartWorkerAutoSelect();
+                return await StartWorkerAutoSelect();
                 break;
             case WorkerType.Text:
                 await StartTextWorker();
-                break;
+                return WorkerType.Text;
             case WorkerType.Image:
                 await StartImageWorker();
-                break;
+                return WorkerType.Image;
             default:
                 throw new Exception($"Unknown worker type: {workerType}");
         }
     }
 
-    private async Task StartWorkerAutoSelect()
+    private async Task<WorkerType> StartWorkerAutoSelect()
     {
         WorkerType workerType = await FetchAutoPreferredWorkerType();
 
@@ -185,7 +292,7 @@ public class OmniControllerMain
             throw new Exception("Auto worker type value cannot be Auto itself");
         }
         
-        await StartWorkerBasedOnType(workerType);
+        return await StartWorkerBasedOnType(workerType);
     }
     
     private async Task<WorkerType> FetchAutoPreferredWorkerType()
@@ -241,10 +348,12 @@ public class OmniControllerMain
     private async Task StartImageWorker()
     {
         AddOutput("Starting image worker...");
+        Status = WorkerStatus.Starting;
+        
         await _imageWorkerController.StartImageWorker();
         
         AddOutput("Image worker started");
-        Status = true;
+        Status = WorkerStatus.Running;
     }
 
     private async Task StartTextWorker()
@@ -263,15 +372,21 @@ public class OmniControllerMain
         AddOutput("Aphrodite started!");
 
         AddOutput("Starting Grid Text Worker...");
+        Status = WorkerStatus.Starting;
+        
         await _gridWorkerController.StartGridTextWorker();
+        
         AddOutput("Grid Text Worker started!");
-        Status = true;
+        Status = WorkerStatus.Running;
     }
     
-    
-
     private void AddOutput(string output)
     {
+        if (Output.Count > 10000)
+        {
+            Output.RemoveAt(0);
+        }
+        
         _logger.LogInformation(output);
         Output.Add(output);
         StateChangedEvent?.Invoke(this, EventArgs.Empty);

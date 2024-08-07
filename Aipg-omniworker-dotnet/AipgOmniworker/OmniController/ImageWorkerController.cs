@@ -100,6 +100,11 @@ public class ImageWorkerController(ILogger<ImageWorkerController> logger)
     
     private void PrintGridTextWorkerOutput(string output)
     {
+        if (Output.Count > 10000)
+        {
+            Output.RemoveAt(0);
+        }
+        
         output =  new Regex(@"\x1B\[[^@-~]*[@-~]").Replace(output, "");
         Output.Add(output);
         logger.LogInformation(output);
@@ -137,5 +142,10 @@ public class ImageWorkerController(ILogger<ImageWorkerController> logger)
     public void ClearOutput()
     {
         Output.Clear();
+    }
+
+    public async Task<bool> IsRunning()
+    {
+        return _workerProcess != null && !_workerProcess.HasExited;
     }
 }
