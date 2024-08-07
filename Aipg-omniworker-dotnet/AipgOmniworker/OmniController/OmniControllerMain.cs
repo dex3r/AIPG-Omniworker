@@ -143,8 +143,8 @@ public class OmniControllerMain
         _gridWorkerController.ClearOutput();
         _aphroditeController.ClearOutput();
         _imageWorkerController.ClearOutput();
-        Output.Clear();
 
+        AddOutput($"---- {DateTime.Now.ToString()} ----");
         AddOutput("Starting worker...");
         Status = WorkerStatus.Starting;
 
