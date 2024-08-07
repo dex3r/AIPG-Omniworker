@@ -11,6 +11,7 @@ This repository allows you to set up an AIPG Worker.
 ## Linux
 
 1. Install Docker if not installed already https://www.docker.com/products/docker-desktop/
+1. Install NVIDIA Container Toolkit if not installed already https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#installing-with-apt
 1. Run this command: `sudo docker rm -f aipg-omniworker ; sudo docker run -d -p 7870:8080 --gpus "all" --shm-size 8g --name aipg-omniworker dex3r/aipg-omniworker`
 1. Go to http://localhost:7870/ and follow the instructions
 
