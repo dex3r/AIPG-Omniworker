@@ -32,7 +32,7 @@ AUTOSTART_WORKER - true/false - if true, the worker will start as soon as the co
 ```
 
 e.g.
-`docker run -d -p 7870:8080 --gpus "all" --shm-size 8g --mount source=aipg-omniworker-volume,target=/persistent --env GRID_API_KEY=YOUR_GRID_KEY_HERE --env WORKER_NAME=YOUR_WORKER_NAME_HERE WORKER_TYPE=auto --env AUTOSTART_WORKER=true --name aipg-omniworker dex3r/aipg-omniworker`
+`docker run -d -p 7870:8080 --gpus "all" --shm-size 8g --mount source=aipg-omniworker-volume,target=/persistent --env GRID_API_KEY=YOUR_GRID_KEY_HERE --env WORKER_NAME=YOUR_WORKER_NAME_HERE --env WORKER_TYPE=auto --env AUTOSTART_WORKER=true --name aipg-omniworker dex3r/aipg-omniworker`
 
 # Features
 
