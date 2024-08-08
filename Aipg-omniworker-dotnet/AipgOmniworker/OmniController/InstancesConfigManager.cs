@@ -38,6 +38,47 @@ public class InstancesConfigManager(PersistentStorage persistentStorage)
         InstanceConfig instanceConfig = YamlConfigManager.DeserializeConfig<InstanceConfig>(fullPath);
         
         instanceConfig.InstanceId = instanceId;
+
+        InsertEnvironmentVariables(instanceConfig);
+        
+        return instanceConfig;
+    }
+    
+    private void InsertEnvironmentVariables(InstanceConfig instanceConfig)
+    {
+        if (Environment.GetEnvironmentVariable("WORKER_TYPE") != null)
+        {
+            if (Enum.TryParse(Environment.GetEnvironmentVariable("WORKER_TYPE"), true, out WorkerType configWorkerType))
+            {
+                instanceConfig.WorkerType = configWorkerType;
+            }
+            else
+            {
+                throw new Exception("Failed to parse WORKER_TYPE environment variable");
+            }
+        }
+        
+        if (Environment.GetEnvironmentVariable("AUTOSTART_WORKER") != null)
+        {
+            if (bool.TryParse(Environment.GetEnvironmentVariable("AUTOSTART_WORKER"), out bool autostartWorker))
+            {
+                instanceConfig.AutoStartWorker = autostartWorker;
+            }
+            else
+            {
+                throw new Exception("Failed to parse AUTOSTART_WORKER environment variable");
+            }
+        }
+    }
+    
+    public async Task<InstanceConfig> LoadInstanceConfig(int instanceId)
+    {
+        InstanceConfig? instanceConfig = await LoadInstanceConfigFromFile($"{_instanceConfigPrefix}{instanceId}.yaml");
+        
+        if(instanceConfig == null)
+        {
+            instanceConfig = await CreateNewInstance($"Worker {instanceId}", instanceId);
+        }
         
         return instanceConfig;
     }
@@ -63,6 +104,8 @@ public class InstancesConfigManager(PersistentStorage persistentStorage)
         };
         
         await SaveInstanceConfig(instanceConfig);
+        
+        InsertEnvironmentVariables(instanceConfig);
 
         return instanceConfig;
     }

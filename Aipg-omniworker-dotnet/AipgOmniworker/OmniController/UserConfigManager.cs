@@ -19,30 +19,6 @@ public class UserConfigManager(PersistentStorage persistentStorage, ILogger<User
             config.WorkerName = Environment.GetEnvironmentVariable("WORKER_NAME");
         }
 
-        if (Environment.GetEnvironmentVariable("WORKER_TYPE") != null)
-        {
-            if (Enum.TryParse(Environment.GetEnvironmentVariable("WORKER_TYPE"), true, out WorkerType configWorkerType))
-            {
-                config.WorkerType = configWorkerType;
-            }
-            else
-            {
-                throw new Exception("Failed to parse WORKER_TYPE environment variable");
-            }
-        }
-        
-        if (Environment.GetEnvironmentVariable("AUTOSTART_WORKER") != null)
-        {
-            if (bool.TryParse(Environment.GetEnvironmentVariable("AUTOSTART_WORKER"), out bool autostartWorker))
-            {
-                config.AutoStartWorker = autostartWorker;
-            }
-            else
-            {
-                throw new Exception("Failed to parse AUTOSTART_WORKER environment variable");
-            }
-        }
-
         await SaveConfig(config);
     }
 }

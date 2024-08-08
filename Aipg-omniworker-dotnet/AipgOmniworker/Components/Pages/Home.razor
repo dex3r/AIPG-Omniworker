@@ -1,17 +1,14 @@
 ﻿@page "/"
 @using AipgOmniworker.OmniController
 @rendermode InteractiveServer
-@inject GridWorkerController GridWorkerController
-@inject BridgeConfigManager BridgeConfigManager
-@inject TextWorkerConfigManager TextWorkerConfigManager
-@inject OmniControllerMain OmniControllerMain
-@inject AphroditeController AphroditeController
-@inject ImageWorkerController ImageWorkerController
-@inject ImageWorkerConfigManager ImageWorkerConfigManager
 @inject UserConfigManager UserConfigManager
-@inject ILogger<Home> logger
+@inject ILogger<Home> Logger
+@inject InstancesManager InstancesManager;
+@inject InstancesConfigManager InstancesConfigManager;
 
 <PageTitle>Home</PageTitle>
+
+<h3>Global Config</h3>
 
 <label for="GridApiKey">Grid Api Key:</label><br/>
 <input type="text" id="GridApiKey" @bind="@GridApiKey" /><br/>
@@ -25,6 +22,20 @@ If you don't have Grid API Key get one from <a href="https://api.aipowergrid.io/
 <br/>
 <label for="HuggingFaceToken">Hugging Face Token:</label><br/>
 <input type="text" id="HuggingFaceToken" @bind="@HuggingFaceToken" /><br/>
+<br/>
+
+@* Named section with a title "Worker Config" *@
+
+<hr />
+<h3>Worker Config</h3>
+
+<label for="SelectedInstance">Worker:</label><br/>
+<select id="SelectedInstance" @bind="@SelectedInstanceId">
+    @foreach (InstanceConfig instanceConfig in InstanceConfigs ?? Array.Empty<InstanceConfig>())
+    {
+        <option value="@instanceConfig.InstanceId">@instanceConfig.InstanceName</option>
+    }
+</select>
 <br/>
 
 <label for="WorkerType">Worker Type:</label><br/>
@@ -41,7 +52,7 @@ If you don't have Grid API Key get one from <a href="https://api.aipowergrid.io/
 @* Not sure where to get one? Click <a href="https://aipowergrid.io/wallet">here</a><br/> *@
 
 @* Display status *@
-@switch(OmniControllerMain.Status)
+@switch(OmniControllerMain?.Status ?? WorkerStatus.Stopped)
 {
     case WorkerStatus.Running:
         <div class="alert alert-success" role="alert">
@@ -56,7 +67,7 @@ If you don't have Grid API Key get one from <a href="https://api.aipowergrid.io/
     case WorkerStatus.Starting:
     case WorkerStatus.Stopping:
         <div class="alert alert-warning" role="alert">
-            Worker is @OmniControllerMain.Status
+            Worker is @OmniControllerMain?.Status
         </div>
         break;
 }
@@ -65,16 +76,16 @@ If you don't have Grid API Key get one from <a href="https://api.aipowergrid.io/
 <button class="btn btn-primary" @onclick="StopWorkers">Stop worker</button>
 
 <!-- Disable worker output logs as scrollable readonly text box -->
-<textarea class="form-control" rows="20" readonly>@OmniControllerMain.Output.ToOutputString()</textarea>
+<textarea class="form-control" rows="20" readonly>@OmniControllerMain?.Output.ToOutputString()</textarea>
 
 <br/>
 Text worker process output:
-<textarea class="form-control" rows="20" readonly>@GridWorkerController.GridTextWorkerOutput.ToOutputString()</textarea>
+<textarea class="form-control" rows="20" readonly>@_selectedInstance?.GridWorkerController.GridTextWorkerOutput.ToOutputString()</textarea>
 
 <br/>
 Aphrodite process output:
-<textarea class="form-control" rows="20" readonly>@AphroditeController.AphroditeOutput.ToOutputString()</textarea>
+<textarea class="form-control" rows="20" readonly>@_selectedInstance?.AphroditeController.AphroditeOutput.ToOutputString()</textarea>
 
 <br/>
 Image worker process output:
-<textarea class="form-control" rows="20" readonly>@ImageWorkerController.Output.ToOutputString()</textarea>
+<textarea class="form-control" rows="20" readonly>@_selectedInstance?.ImageWorkerController.Output.ToOutputString()</textarea>

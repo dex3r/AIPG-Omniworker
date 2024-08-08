@@ -11,6 +11,7 @@ public class OmniControllerMain
     public event EventHandler? StateChangedEvent;
 
     private CancellationTokenSource? _startCancellation;
+    private readonly Instance _instance;
     private readonly GridWorkerController _gridWorkerController;
     private readonly AphroditeController _aphroditeController;
     private readonly ImageWorkerController _imageWorkerController;
@@ -21,11 +22,12 @@ public class OmniControllerMain
     private readonly BridgeConfigManager _bridgeConfigManager;
     private CancellationToken? _appClosingToken;
 
-    public OmniControllerMain(GridWorkerController gridWorkerController, AphroditeController aphroditeController,
+    public OmniControllerMain(Instance instance, GridWorkerController gridWorkerController, AphroditeController aphroditeController,
         ImageWorkerController imageWorkerController, ILogger<OmniControllerMain> logger, UserConfigManager userConfigManager,
         TextWorkerConfigManager textWorkerConfigManager, ImageWorkerConfigManager imageWorkerConfigManager,
         BridgeConfigManager bridgeConfigManager)
     {
+        _instance = instance;
         _gridWorkerController = gridWorkerController;
         _aphroditeController = aphroditeController;
         _imageWorkerController = imageWorkerController;
@@ -51,9 +53,7 @@ public class OmniControllerMain
             stopWorkersTask.Wait(TimeSpan.FromSeconds(5));
         });
         
-        UserConfig userConfig = await _userConfigManager.LoadConfig();
-        
-        if (userConfig.AutoStartWorker)
+        if (_instance.Config.AutoStartWorker)
         {
             _logger.LogInformation("Auto starting worker...");
             await ApplyUserConfigsToWorkers();
@@ -158,7 +158,7 @@ public class OmniControllerMain
 
         UserConfig userConfig = await _userConfigManager.LoadConfig();
 
-        WorkerType workerType = await StartWorkerBasedOnType(userConfig.WorkerType);
+        WorkerType workerType = await StartWorkerBasedOnType(_instance.Config.WorkerType);
         
         if(Status == WorkerStatus.Running || Status == WorkerStatus.Starting)
         {

@@ -18,7 +18,8 @@ public class AphroditeController
 
     private readonly string _address = "http://localhost:2242";
     
-    public AphroditeController(TextWorkerConfigManager textWorkerConfigManager, ILogger<AphroditeController> logger)
+    public AphroditeController(Instance instance,
+        TextWorkerConfigManager textWorkerConfigManager, ILogger<AphroditeController> logger)
     {
         _textWorkerConfigManager = textWorkerConfigManager;
         _logger = logger;

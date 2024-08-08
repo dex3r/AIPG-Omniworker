@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace AipgOmniworker.OmniController;
 
-public class GridWorkerController(ILogger<GridWorkerController> logger)
+public class GridWorkerController(Instance instance, ILogger<GridWorkerController> logger)
 {
     public List<string> GridTextWorkerOutput { get; private set; } = new();
 

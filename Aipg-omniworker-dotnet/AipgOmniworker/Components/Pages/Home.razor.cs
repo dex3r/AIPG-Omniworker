@@ -1,4 +1,5 @@
 ﻿using AipgOmniworker.OmniController;
+using Microsoft.AspNetCore.Components;
 
 namespace AipgOmniworker.Components.Pages;
 
@@ -10,11 +11,34 @@ public partial class Home
     private string? HuggingFaceToken { get; set; }
     private string? WalletAddress { get; set; }
     private WorkerType WorkerType { get; set; } = OmniController.WorkerType.Auto;
+    private OmniControllerMain? OmniControllerMain => _selectedInstance?.OmniControllerMain;
+
+    public int SelectedInstanceId
+    {
+        get => _selectedInstanceId;
+        set
+        {
+            if (_selectedInstanceId != value)
+            {
+                _selectedInstanceId = value;
+                OnSelectedInstanceChangedNonAsync();
+            }
+        }
+    }
+
+    public InstanceConfig[]? InstanceConfigs { get; protected set; }
+    
+    private int _selectedInstanceId = -1;
+    private Instance? _selectedInstance;
+    private SemaphoreSlim _changeInstanceSemaphore = new(1, 1);
 
     protected override async Task OnInitializedAsync()
     {
-        OmniControllerMain.StateChangedEvent += (_, _) => InvokeAsync(StateHasChanged);
-
+        InstanceConfigs = await InstancesConfigManager.GetAllInstances();
+        
+        SelectedInstanceId = 0;
+        await OnSelectedInstanceChanged();
+        
         try
         {
             var userConfig = await UserConfigManager.LoadConfig();
@@ -22,21 +46,86 @@ public partial class Home
             WorkerName = userConfig.WorkerName;
             ModelName = userConfig.TextModelName;
             HuggingFaceToken = userConfig.HuggingFaceToken;
-            WorkerType = userConfig.WorkerType;
         }
         catch (Exception e)
         {
-            OmniControllerMain.Output.Add(e.ToString());
-            logger.LogError(e, "Failed to load user config");
+            _selectedInstance?.OmniControllerMain.Output.Add(e.ToString());
+            Logger.LogError(e, "Failed to load user config");
+        }
+    }
+
+    private void OnOmniControllerStateChanged(object? sender, EventArgs e)
+    {
+        InvokeAsync(StateHasChanged);
+    }
+    
+    private async void OnSelectedInstanceChangedNonAsync()
+    {
+        try
+        {
+            await OnSelectedInstanceChanged();
+        }
+        catch (Exception e)
+        {
+            Logger.LogError(e, "Failed to change selected instance");
+        }
+    }
+
+    private async Task OnSelectedInstanceChanged()
+    {
+        try
+        {
+            await _changeInstanceSemaphore.WaitAsync();
+            
+            if (_selectedInstance != null)
+            {
+                _selectedInstance.OmniControllerMain.StateChangedEvent -= OnOmniControllerStateChanged;
+                await SaveWorkerConfig();
+            }
+
+            _selectedInstance = await InstancesManager.GetInstance(SelectedInstanceId);
+            _selectedInstance.OmniControllerMain.StateChangedEvent += OnOmniControllerStateChanged;
+        
+            WorkerType = _selectedInstance.Config.WorkerType;
+        }
+        finally
+        {
+            _changeInstanceSemaphore.Release();
         }
     }
 
     protected override async Task OnParametersSetAsync()
     {
         await SaveUserConfig();
+        await SaveWorkerConfig();
     }
 
-    private async Task SaveUserConfig(bool? setAutostart = null)
+    private async Task SaveWorkerConfig(bool? setAutostart = null)
+    {
+        if (_selectedInstance == null)
+        {
+            return;
+        }
+        
+        try
+        {
+            _selectedInstance.Config.WorkerType = WorkerType;
+            if (setAutostart.HasValue)
+            {
+                _selectedInstance.Config.AutoStartWorker = setAutostart.Value;
+            }
+
+            await _selectedInstance.SaveConfig();
+        }
+        catch (Exception e)
+        {
+            _selectedInstance?.OmniControllerMain.Output.Add("Failed to save worker config");
+            _selectedInstance?.OmniControllerMain.Output.Add(e.ToString());
+            Logger.LogError(e, "Failed to save user config");
+        }
+    }
+
+    private async Task SaveUserConfig()
     {
         try
         {
@@ -44,51 +133,56 @@ public partial class Home
             userConfig.ApiKey = GridApiKey;
             userConfig.WorkerName = WorkerName;
             userConfig.TextModelName = ModelName;
-            userConfig.HuggingFaceToken = HuggingFaceToken;
-            userConfig.WorkerType = WorkerType;
-
-            if (setAutostart.HasValue)
-            {
-                userConfig.AutoStartWorker = setAutostart.Value;
-            }
+            userConfig.HuggingFaceToken = HuggingFaceToken; ;
 
             await UserConfigManager.SaveConfig(userConfig);
         }
         catch (Exception e)
         {
-            OmniControllerMain.Output.Add("Failed to save user config");
-            OmniControllerMain.Output.Add(e.ToString());
-            logger.LogError(e, "Failed to save user config");
+            _selectedInstance?.OmniControllerMain.Output.Add("Failed to save user config");
+            _selectedInstance?.OmniControllerMain.Output.Add(e.ToString());
+            Logger.LogError(e, "Failed to save user config");
         }
     }
 
     private async Task StartWorkers()
     {
+        if (_selectedInstance == null)
+        {
+            throw new InvalidOperationException("Selected instance is null");
+        }
+        
         if (string.IsNullOrWhiteSpace(ModelName))
         {
-            OmniControllerMain.Output.Add("Model Name is required!");
+            _selectedInstance.OmniControllerMain.Output.Add("Model Name is required!");
             return;
         }
 
         if (string.IsNullOrWhiteSpace(GridApiKey))
         {
-            OmniControllerMain.Output.Add("Grid API Key is required!");
+            _selectedInstance.OmniControllerMain.Output.Add("Grid API Key is required!");
             return;
         }
 
         if (string.IsNullOrWhiteSpace(WorkerName))
         {
-            OmniControllerMain.Output.Add("Worker Name is required!");
+            _selectedInstance.OmniControllerMain.Output.Add("Worker Name is required!");
             return;
         }
 
-        await SaveUserConfig(true);
-        await OmniControllerMain.ApplyUserConfigsToWorkers();
-        await OmniControllerMain.SaveAndRestart();
+        await SaveUserConfig();
+        await SaveWorkerConfig(true);
+        await _selectedInstance.OmniControllerMain.ApplyUserConfigsToWorkers();
+        await _selectedInstance.OmniControllerMain.SaveAndRestart();
     }
 
     private async Task StopWorkers()
     {
-        await OmniControllerMain.StopWorkers();
+        if (_selectedInstance == null)
+        {
+            throw new InvalidOperationException("Selected instance is null");
+        }
+        
+        await _selectedInstance.OmniControllerMain.StopWorkers();
     }
 }

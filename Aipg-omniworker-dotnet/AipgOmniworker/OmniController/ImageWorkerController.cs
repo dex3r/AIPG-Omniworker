@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace AipgOmniworker.OmniController;
 
-public class ImageWorkerController(ILogger<ImageWorkerController> logger)
+public class ImageWorkerController(Instance instance, ILogger<ImageWorkerController> logger)
 {
     public List<string> Output { get; private set; } = new();
 

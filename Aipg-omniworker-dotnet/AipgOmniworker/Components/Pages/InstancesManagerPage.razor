@@ -75,8 +75,15 @@
 
     private async Task SaveInstance(InstanceConfig instance)
     {
+        if (string.IsNullOrWhiteSpace(instance.InstanceName))
+        {
+            instance.InstanceName = $"Instance {instance.InstanceId}";
+        }
+        
         await instancesConfigManager.SaveInstanceConfig(instance);
         EditingInstance = null;
+        
+        await LoadAllInstances();
     }
 
     private void CancelEdit()
