@@ -16,10 +16,25 @@ public class PersistentStorage
         return File.Exists(GetConfigPath(configName));
     }
 
+    public async Task<string[]> GetAllFiles()
+    {
+        return Directory.GetFiles(ConfigsPath).Select(Path.GetFileName).ToArray();
+    }
+
     public async Task CopyConfigFromPersistentStorage(string configName, string outputPath)
     {
         File.Copy(GetConfigPath(configName), outputPath);
     }
     
-    private string GetConfigPath(string configName) => Path.Combine(ConfigsPath, configName);
+    public string GetConfigPath(string configName) => Path.Combine(ConfigsPath, configName);
+
+    public async Task DeleteConfig(string fileName)
+    {
+        string path = GetConfigPath(fileName);
+        
+        if(File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
 }

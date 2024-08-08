@@ -1,0 +1,92 @@
+﻿@page "/InstancesManager"
+@rendermode InteractiveServer
+@using System.Collections.Generic
+@using AipgOmniworker.OmniController
+@inject InstancesConfigManager instancesConfigManager
+
+<h3>Instances Manager</h3>
+
+<ul>
+    @foreach (var instance in Instances)
+    {
+        <li>
+            @if (instance.InstanceId == 0)
+            {
+                @instance.InstanceName
+            }
+            else if (EditingInstance == instance)
+            {
+                <input @bind="instance.InstanceName"/>
+                <nbsp/>
+                <nbsp/>
+                <nbsp/>
+                <button class="btn-secondary" @onclick="() => SaveInstance(instance)">Save</button>
+                <button class="btn-secondary" @onclick="CancelEdit">Cancel</button>
+            }
+            else
+            {
+                @instance.InstanceName
+                <button class="btn-secondary" @onclick="() => EditInstance(instance)">Rename</button>
+                <button class="btn-secondary" @onclick="() => DeleteInstance(instance)">Delete</button>
+            }
+        </li>
+    }
+</ul>
+
+<br/>
+<br/>
+
+<div>
+    <input @bind="@NewInstanceName" placeholder="New instance name" />
+    <button class="btn-primary" @onclick="AddInstance">Add Instance</button>
+</div>
+
+@code {
+    private InstanceConfig[] Instances { get; set; } = Array.Empty<InstanceConfig>();
+    private string? NewInstanceName { get; set; }
+    private InstanceConfig? EditingInstance { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllInstances();
+    }
+
+    public async Task LoadAllInstances()
+    {
+        Instances = await instancesConfigManager.GetAllInstances();
+        StateHasChanged();
+    }
+    
+    private async Task AddInstance()
+    {
+        if (!string.IsNullOrWhiteSpace(NewInstanceName))
+        {
+            await instancesConfigManager.CreateNewInstance(NewInstanceName);
+            NewInstanceName = string.Empty;
+
+            await LoadAllInstances();
+        }
+    }
+
+    private void EditInstance(InstanceConfig instance)
+    {
+        EditingInstance = instance;
+    }
+
+    private async Task SaveInstance(InstanceConfig instance)
+    {
+        await instancesConfigManager.SaveInstanceConfig(instance);
+        EditingInstance = null;
+    }
+
+    private void CancelEdit()
+    {
+        EditingInstance = null;
+    }
+
+    private async Task DeleteInstance(InstanceConfig instance)
+    {
+        await instancesConfigManager.DeleteInstance(instance);
+        await LoadAllInstances();
+    }
+}

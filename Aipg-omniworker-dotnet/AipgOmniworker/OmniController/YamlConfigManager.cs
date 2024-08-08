@@ -2,7 +2,7 @@
 
 namespace AipgOmniworker.OmniController;
 
-public abstract class YamlConfigManager<T>(PersistentStorage persistentStorage, ILogger logger)
+public abstract class YamlConfigManager<T>(PersistentStorage persistentStorage, ILogger logger) : YamlConfigManager
     where T : class, new()
 {
     public abstract string ConfigName { get; }
@@ -18,14 +18,8 @@ public abstract class YamlConfigManager<T>(PersistentStorage persistentStorage, 
             await CreateDefaultConfig();
             wasJustCreated = true;
         }
-
-        TextReader input = new StreamReader(ConfigPath);
-
-        IDeserializer deserializer = new DeserializerBuilder()
-            .IgnoreUnmatchedProperties()
-            .Build();
-
-        T config = deserializer.Deserialize<T>(input);
+        
+        T config = DeserializeConfig<T>(ConfigPath);
 
         if (config == null)
         {
@@ -76,11 +70,30 @@ public abstract class YamlConfigManager<T>(PersistentStorage persistentStorage, 
 
     public async Task SaveConfig(T config)
     {
-        ISerializer serializer = new SerializerBuilder().Build();
-        string yaml = serializer.Serialize(config);
+        string yaml = SerializeConfig(config);
        
         await File.WriteAllTextAsync(ConfigPath, yaml);
 
         await persistentStorage.SaveConfig(ConfigName, yaml);
+    }
+}
+
+public abstract class YamlConfigManager
+{
+    public static string SerializeConfig(object config)
+    {
+        ISerializer serializer = new SerializerBuilder().Build();
+        return serializer.Serialize(config);
+    }
+
+    public static TConfig DeserializeConfig<TConfig>(string configPath)
+    {
+        TextReader input = new StreamReader(configPath);
+
+        IDeserializer deserializer = new DeserializerBuilder()
+            .IgnoreUnmatchedProperties()
+            .Build();
+
+        return deserializer.Deserialize<TConfig>(input);
     }
 }

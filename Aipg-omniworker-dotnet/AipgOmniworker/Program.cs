@@ -15,6 +15,7 @@ builder.Services.AddSingleton<ImageWorkerConfigManager>();
 builder.Services.AddSingleton<ImageWorkerController>();
 builder.Services.AddSingleton<PersistentStorage>();
 builder.Services.AddSingleton<UserConfigManager>();
+builder.Services.AddSingleton<InstancesConfigManager>();
 
 builder.Logging.ClearProviders();
 
