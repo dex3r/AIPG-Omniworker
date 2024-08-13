@@ -74,7 +74,8 @@ public class ImageWorkerController(Instance instance, UserConfigManager userConf
             Environment =
             {
                 {"AI_HORDE_URL", "https://api.aipowergrid.io/api/"},
-                {"CUDA_VISIBLE_DEVICES",  devicesString}
+                {"CUDA_VISIBLE_DEVICES",  devicesString},
+                {"AIWORKER_DREAMER_NAME", instanceName}
             }
         });
         
