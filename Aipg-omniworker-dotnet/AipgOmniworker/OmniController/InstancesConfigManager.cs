@@ -1,6 +1,6 @@
 ﻿namespace AipgOmniworker.OmniController;
 
-public class InstancesConfigManager(PersistentStorage persistentStorage)
+public class InstancesConfigManager(PersistentStorage persistentStorage, ILogger<InstancesConfigManager> logger)
 {
     private readonly string _instanceConfigPrefix = "instanceConfig_";
     
@@ -77,7 +77,13 @@ public class InstancesConfigManager(PersistentStorage persistentStorage)
         
         if(instanceConfig == null)
         {
+            logger.LogInformation("Creating new instance config for instance {InstanceId}", instanceId);
             instanceConfig = await CreateNewInstance($"Worker {instanceId}", instanceId);
+        }
+        else
+        {
+            logger.LogInformation("Loaded existing instance config for instance {InstanceId}: with WorkerType: {WorkerType}", 
+                instanceId, instanceConfig.WorkerType);
         }
         
         return instanceConfig;

@@ -156,9 +156,8 @@ public class OmniControllerMain
         _startCancellation = new CancellationTokenSource();
         
         CancellationToken token = _startCancellation.Token;
-
-        UserConfig userConfig = await _userConfigManager.LoadConfig();
-
+        
+        AddOutput($"Starting worker based on type from config: {_instance.Config.WorkerType}");
         WorkerType workerType = await StartWorkerBasedOnType(_instance.Config.WorkerType);
         
         if(Status == WorkerStatus.Running || Status == WorkerStatus.Starting)
@@ -268,6 +267,8 @@ public class OmniControllerMain
 
     private async Task<WorkerType> StartWorkerBasedOnType(WorkerType workerType)
     {
+        AddOutput($"Starting worker of type: {workerType}");
+        
         switch (workerType)
         {
             case WorkerType.Auto:
