@@ -6,21 +6,28 @@ using Serilog.Exceptions;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddSingleton<InstancesManager>();
 builder.Services.AddSingleton<BridgeConfigManager>();
-builder.Services.AddSingleton<GridWorkerController>();
 builder.Services.AddSingleton<TextWorkerConfigManager>();
-builder.Services.AddSingleton<AphroditeController>();
-builder.Services.AddSingleton<OmniControllerMain>();
 builder.Services.AddSingleton<ImageWorkerConfigManager>();
-builder.Services.AddSingleton<ImageWorkerController>();
 builder.Services.AddSingleton<PersistentStorage>();
 builder.Services.AddSingleton<UserConfigManager>();
+builder.Services.AddSingleton<InstancesConfigManager>();
+
+builder.Services.AddScoped<Instance>();
+builder.Services.AddScoped<OmniControllerMain>();
+builder.Services.AddScoped<ImageWorkerController>();
+builder.Services.AddScoped<AphroditeController>();
+builder.Services.AddScoped<GridWorkerController>();
 
 builder.Logging.ClearProviders();
 
+string consoleLogOutputTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}][{SourceContext}] {Message:lj}{NewLine}{Exception}";
+
 Log.Logger = new LoggerConfiguration()
     .Enrich.WithExceptionDetails()
-    .WriteTo.Console()
+    .Enrich.FromLogContext()
+    .WriteTo.Console(outputTemplate: consoleLogOutputTemplate)
     .WriteTo.File("/persistent/logs/omniworker.log", 
         rollingInterval: RollingInterval.Day,
         rollOnFileSizeLimit: true,
@@ -41,10 +48,20 @@ builder.Services.AddRazorComponents()
 
 var app = builder.Build();
 
-OmniControllerMain workersController = app.Services.GetRequiredService<OmniControllerMain>();
+InstancesConfigManager instancesConfigManager = app.Services.GetRequiredService<InstancesConfigManager>();
+InstancesManager instancesManager = app.Services.GetRequiredService<InstancesManager>();
 CancellationTokenSource appClosingToken = new();
-Task workersControllerTask = Task.Run(async () => await workersController.OnAppStarted(appClosingToken.Token),
-    appClosingToken.Token);
+List<Task> workersControllersTasks = new();
+
+foreach (InstanceConfig instanceConfig in await instancesConfigManager.GetAllInstances())
+{
+    Instance instance = await instancesManager.GetInstance(instanceConfig.InstanceId);
+    
+    Task workersControllerTask = Task.Run(async () => await instance.OmniControllerMain.OnAppStarted(appClosingToken.Token),
+        appClosingToken.Token);
+    
+    workersControllersTasks.Add(workersControllerTask);
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -64,4 +81,5 @@ app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 app.Run();
 
 appClosingToken.Cancel();
-await workersControllerTask;
+
+await Task.WhenAll(workersControllersTasks.ToArray());

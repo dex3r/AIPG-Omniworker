@@ -11,6 +11,7 @@ public class OmniControllerMain
     public event EventHandler? StateChangedEvent;
 
     private CancellationTokenSource? _startCancellation;
+    private readonly Instance _instance;
     private readonly GridWorkerController _gridWorkerController;
     private readonly AphroditeController _aphroditeController;
     private readonly ImageWorkerController _imageWorkerController;
@@ -20,12 +21,15 @@ public class OmniControllerMain
     private readonly ImageWorkerConfigManager _imageWorkerConfigManager;
     private readonly BridgeConfigManager _bridgeConfigManager;
     private CancellationToken? _appClosingToken;
+    
+    private readonly static SemaphoreSlim _workerStartingSemaphore = new(1, 1);
 
-    public OmniControllerMain(GridWorkerController gridWorkerController, AphroditeController aphroditeController,
+    public OmniControllerMain(Instance instance, GridWorkerController gridWorkerController, AphroditeController aphroditeController,
         ImageWorkerController imageWorkerController, ILogger<OmniControllerMain> logger, UserConfigManager userConfigManager,
         TextWorkerConfigManager textWorkerConfigManager, ImageWorkerConfigManager imageWorkerConfigManager,
         BridgeConfigManager bridgeConfigManager)
     {
+        _instance = instance;
         _gridWorkerController = gridWorkerController;
         _aphroditeController = aphroditeController;
         _imageWorkerController = imageWorkerController;
@@ -50,18 +54,25 @@ public class OmniControllerMain
             Task stopWorkersTask = Task.Run(StopWorkers);
             stopWorkersTask.Wait(TimeSpan.FromSeconds(5));
         });
-        
-        UserConfig userConfig = await _userConfigManager.LoadConfig();
-        
-        if (userConfig.AutoStartWorker)
+
+        try
         {
-            _logger.LogInformation("Auto starting worker...");
-            await ApplyUserConfigsToWorkers();
-            await StartGridWorkerAsync();
+            await _workerStartingSemaphore.WaitAsync(appClosing);
+            
+            if (_instance.Config.AutoStartWorker)
+            {
+                _logger.LogInformation("Auto starting worker...");
+                await ApplyUserConfigsToWorkers();
+                await StartGridWorkerAsync();
+            }
+            else
+            {
+                _logger.LogInformation("Auto start worker is disabled");
+            }
         }
-        else
+        finally
         {
-            _logger.LogInformation("Auto start worker is disabled");
+            _workerStartingSemaphore.Release();
         }
     }
     
@@ -101,8 +112,9 @@ public class OmniControllerMain
         await _bridgeConfigManager.SaveConfig(bridgeConfig);
         
         TextWorkerConfig textWorkerConfig = await _textWorkerConfigManager.LoadConfig();
-        textWorkerConfig.model_name = userConfig.TextModelName;
+        textWorkerConfig.model_name = _instance.Config.TextWorkerModelName;
         textWorkerConfig.hugging_face_token = userConfig.HuggingFaceToken;
+        textWorkerConfig.gpus = _instance.Config.Devices.Trim();
         await _textWorkerConfigManager.SaveConfig(textWorkerConfig);
         
         ImageWorkerConfig imageWorkerConfig = await _imageWorkerConfigManager.LoadConfig();
@@ -118,18 +130,24 @@ public class OmniControllerMain
     {
         try
         {
+            await _workerStartingSemaphore.WaitAsync();
+            
             await StartGridWorkerAsync();
         }
         catch (Exception e)
         {
             _logger.LogError(e, "Failed to save and restart");
             AddOutput(e.ToString());
-            
-            if(Status != WorkerStatus.Stopping && Status != WorkerStatus.Stopped)
+
+            if (Status != WorkerStatus.Stopping && Status != WorkerStatus.Stopped)
             {
                 await StopWorkers();
                 Status = WorkerStatus.Stopped;
             }
+        }
+        finally
+        {
+            _workerStartingSemaphore.Release();
         }
     }
 
@@ -155,10 +173,9 @@ public class OmniControllerMain
         _startCancellation = new CancellationTokenSource();
         
         CancellationToken token = _startCancellation.Token;
-
-        UserConfig userConfig = await _userConfigManager.LoadConfig();
-
-        WorkerType workerType = await StartWorkerBasedOnType(userConfig.WorkerType);
+        
+        AddOutput($"Starting worker based on type from config: {_instance.Config.WorkerType}");
+        WorkerType workerType = await StartWorkerBasedOnType(_instance.Config.WorkerType);
         
         if(Status == WorkerStatus.Running || Status == WorkerStatus.Starting)
         {
@@ -267,6 +284,8 @@ public class OmniControllerMain
 
     private async Task<WorkerType> StartWorkerBasedOnType(WorkerType workerType)
     {
+        AddOutput($"Starting worker of type: {workerType}");
+        
         switch (workerType)
         {
             case WorkerType.Auto:

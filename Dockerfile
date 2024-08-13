@@ -52,6 +52,7 @@ WORKDIR /image-worker
 
 COPY image-worker/ .
 RUN chmod +x /image-worker/update-and-run.sh
+RUN chmod +x /image-worker/update-runtime.sh
 RUN apt-get -y install wget
 RUN apt-get -y install libgl1
 RUN apt-get -y install libjemalloc2
@@ -60,6 +61,8 @@ RUN apt-get -y install libjemalloc2
 # This can be solved on git on per-checkout basis, but this is much safer
 RUN apt-get -y install dos2unix
 RUN find . -type f -name "*.sh" -exec dos2unix {} \+;
+
+RUN /image-worker/update-runtime.sh
 
 #USER $APP_UID
 WORKDIR /app

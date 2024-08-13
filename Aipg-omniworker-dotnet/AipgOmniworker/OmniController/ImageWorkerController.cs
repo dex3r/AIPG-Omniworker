@@ -3,7 +3,8 @@ using System.Text.RegularExpressions;
 
 namespace AipgOmniworker.OmniController;
 
-public class ImageWorkerController(ILogger<ImageWorkerController> logger)
+public class ImageWorkerController(Instance instance, UserConfigManager userConfigManager,
+    ILogger<ImageWorkerController> logger)
 {
     public List<string> Output { get; private set; } = new();
 
@@ -35,8 +36,12 @@ public class ImageWorkerController(ILogger<ImageWorkerController> logger)
     {
         PrintGridTextWorkerOutput("Starting image worker...");
 
+        UserConfig userConfig = await userConfigManager.LoadConfig();
+        
         string folderPath = "/image-worker";
-        string scriptPath = "update-and-run.sh";
+        
+        string scriptPath = userConfig.AutoUpdateImageWorker ? "update-and-run.sh" : "horde-bridge.sh";
+        
         string fullPath = Path.Combine(folderPath, scriptPath);
         
         PrintGridTextWorkerOutput($"Checking if script exists at path: {fullPath}");
@@ -56,13 +61,22 @@ public class ImageWorkerController(ILogger<ImageWorkerController> logger)
         
         PrintGridTextWorkerOutput($"Script exists confirmed, running at path: {fullPath}");
         
+        string devicesString = instance.Config.Devices.Trim();
+        string instanceName = $"{userConfig.WorkerName}#{instance.InstanceId}";
+        
         Process? process = Process.Start(new ProcessStartInfo
         {
             FileName = fullPath,
+            //Arguments = $"-n {instanceName}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             WorkingDirectory = WorkingDirectory,
-            Environment = { {"AI_HORDE_URL", "https://api.aipowergrid.io/api/"} }
+            Environment =
+            {
+                {"AI_HORDE_URL", "https://api.aipowergrid.io/api/"},
+                {"CUDA_VISIBLE_DEVICES",  devicesString},
+                {"AIWORKER_DREAMER_NAME", instanceName}
+            }
         });
         
         if (process == null)
