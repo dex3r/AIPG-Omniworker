@@ -67,7 +67,7 @@ public class ImageWorkerController(Instance instance, UserConfigManager userConf
         Process? process = Process.Start(new ProcessStartInfo
         {
             FileName = fullPath,
-            Arguments = $"-n {instanceName}",
+            //Arguments = $"-n {instanceName}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             WorkingDirectory = WorkingDirectory,
