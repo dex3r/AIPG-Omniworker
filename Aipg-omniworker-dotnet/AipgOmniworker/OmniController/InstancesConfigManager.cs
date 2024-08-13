@@ -4,20 +4,32 @@ public class InstancesConfigManager(PersistentStorage persistentStorage, ILogger
 {
     private readonly string _instanceConfigPrefix = "instanceConfig_";
     
+    private readonly SemaphoreSlim _getAllInstancesSemaphore = new(1, 1);
+    private readonly SemaphoreSlim _saveInstanceConfigSemaphore = new(1, 1);
+    
     public async Task<InstanceConfig[]> GetAllInstances()
     {
-        List<string> configs = (await persistentStorage.GetAllFiles())
-            .Where(x => x.StartsWith(_instanceConfigPrefix))
-            .ToList();
-
-        if (!configs.Contains($"{_instanceConfigPrefix}0.yaml"))
+        try
         {
-            await CreateDefaultInstanceConfig();
-            configs.Add("0");
-        }
+            await _getAllInstancesSemaphore.WaitAsync();
+            
+            List<string> configs = (await persistentStorage.GetAllFiles())
+                .Where(x => x.StartsWith(_instanceConfigPrefix))
+                .ToList();
+
+            if (!configs.Contains($"{_instanceConfigPrefix}0.yaml"))
+            {
+                await CreateDefaultInstanceConfig();
+                configs.Add("0");
+            }
         
-        InstanceConfig?[] result = await Task.WhenAll(configs.Select(LoadInstanceConfigFromFile));
-        return result.Where(x => x != null).ToArray()!;
+            InstanceConfig?[] result = await Task.WhenAll(configs.Select(LoadInstanceConfigFromFile));
+            return result.Where(x => x != null).ToArray()!;
+        }
+        finally
+        {
+            _getAllInstancesSemaphore.Release();
+        }
     }
 
     private async Task<InstanceConfig?> LoadInstanceConfigFromFile(string fileName)
@@ -98,8 +110,17 @@ public class InstancesConfigManager(PersistentStorage persistentStorage, ILogger
 
     public async Task SaveInstanceConfig(InstanceConfig config)
     {
-        await persistentStorage.SaveConfig($"{_instanceConfigPrefix}{config.InstanceId}.yaml",
-            YamlConfigManager.SerializeConfig(config));
+        try
+        {
+            await _saveInstanceConfigSemaphore.WaitAsync();
+            
+            await persistentStorage.SaveConfig($"{_instanceConfigPrefix}{config.InstanceId}.yaml",
+                YamlConfigManager.SerializeConfig(config));
+        }
+        finally
+        {
+            _saveInstanceConfigSemaphore.Release();
+        }
     }
 
     public async Task<InstanceConfig> CreateNewInstance(string name, int? forceInstanceId = null)

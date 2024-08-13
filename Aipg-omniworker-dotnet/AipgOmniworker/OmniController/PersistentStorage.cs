@@ -3,38 +3,83 @@
 public class PersistentStorage
 {
     private const string ConfigsPath = "/persistent/config/";
+    
+    private readonly SemaphoreSlim _filesystemSemaphore = new(1, 1);
 
     public async Task SaveConfig(string configName, string fileContent)
     {
-        string configPath = GetConfigPath(configName);
-        Directory.CreateDirectory(Path.GetDirectoryName(configPath));
-        await File.WriteAllTextAsync(configPath, fileContent);
+        try
+        {
+            await _filesystemSemaphore.WaitAsync();
+            
+            string configPath = GetConfigPath(configName);
+            Directory.CreateDirectory(Path.GetDirectoryName(configPath));
+            await File.WriteAllTextAsync(configPath, fileContent);
+        }
+        finally
+        {
+            _filesystemSemaphore.Release();
+        }
     }
 
     public async Task<bool> HasFile(string configName)
     {
-        return File.Exists(GetConfigPath(configName));
+        try
+        {
+            await _filesystemSemaphore.WaitAsync();
+            return File.Exists(GetConfigPath(configName));
+        }
+        finally
+        {
+            _filesystemSemaphore.Release();
+        }
     }
 
     public async Task<string[]> GetAllFiles()
     {
-        return Directory.GetFiles(ConfigsPath).Select(Path.GetFileName).ToArray();
+        try
+        {
+            await _filesystemSemaphore.WaitAsync();
+            
+            return Directory.GetFiles(ConfigsPath).Select(Path.GetFileName).ToArray();
+        }
+        finally
+        {
+            _filesystemSemaphore.Release();
+        }
     }
 
     public async Task CopyConfigFromPersistentStorage(string configName, string outputPath)
     {
-        File.Copy(GetConfigPath(configName), outputPath, true);
+        try
+        {
+            await _filesystemSemaphore.WaitAsync();
+            File.Copy(GetConfigPath(configName), outputPath, true);
+        }
+        finally
+        {
+            _filesystemSemaphore.Release();
+        }
     }
     
     public string GetConfigPath(string configName) => Path.Combine(ConfigsPath, configName);
 
     public async Task DeleteConfig(string fileName)
     {
-        string path = GetConfigPath(fileName);
-        
-        if(File.Exists(path))
+        try
         {
-            File.Delete(path);
+            await _filesystemSemaphore.WaitAsync();
+            
+            string path = GetConfigPath(fileName);
+        
+            if(File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        finally
+        {
+            _filesystemSemaphore.Release();
         }
     }
 }

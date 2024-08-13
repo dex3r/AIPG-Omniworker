@@ -21,6 +21,8 @@ public class OmniControllerMain
     private readonly ImageWorkerConfigManager _imageWorkerConfigManager;
     private readonly BridgeConfigManager _bridgeConfigManager;
     private CancellationToken? _appClosingToken;
+    
+    private readonly static SemaphoreSlim _workerStartingSemaphore = new(1, 1);
 
     public OmniControllerMain(Instance instance, GridWorkerController gridWorkerController, AphroditeController aphroditeController,
         ImageWorkerController imageWorkerController, ILogger<OmniControllerMain> logger, UserConfigManager userConfigManager,
@@ -52,16 +54,25 @@ public class OmniControllerMain
             Task stopWorkersTask = Task.Run(StopWorkers);
             stopWorkersTask.Wait(TimeSpan.FromSeconds(5));
         });
-        
-        if (_instance.Config.AutoStartWorker)
+
+        try
         {
-            _logger.LogInformation("Auto starting worker...");
-            await ApplyUserConfigsToWorkers();
-            await StartGridWorkerAsync();
+            await _workerStartingSemaphore.WaitAsync(appClosing);
+            
+            if (_instance.Config.AutoStartWorker)
+            {
+                _logger.LogInformation("Auto starting worker...");
+                await ApplyUserConfigsToWorkers();
+                await StartGridWorkerAsync();
+            }
+            else
+            {
+                _logger.LogInformation("Auto start worker is disabled");
+            }
         }
-        else
+        finally
         {
-            _logger.LogInformation("Auto start worker is disabled");
+            _workerStartingSemaphore.Release();
         }
     }
     
@@ -119,18 +130,24 @@ public class OmniControllerMain
     {
         try
         {
+            await _workerStartingSemaphore.WaitAsync();
+            
             await StartGridWorkerAsync();
         }
         catch (Exception e)
         {
             _logger.LogError(e, "Failed to save and restart");
             AddOutput(e.ToString());
-            
-            if(Status != WorkerStatus.Stopping && Status != WorkerStatus.Stopped)
+
+            if (Status != WorkerStatus.Stopping && Status != WorkerStatus.Stopped)
             {
                 await StopWorkers();
                 Status = WorkerStatus.Stopped;
             }
+        }
+        finally
+        {
+            _workerStartingSemaphore.Release();
         }
     }
 

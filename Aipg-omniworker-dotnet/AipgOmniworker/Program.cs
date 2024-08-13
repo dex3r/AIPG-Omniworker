@@ -22,9 +22,12 @@ builder.Services.AddScoped<GridWorkerController>();
 
 builder.Logging.ClearProviders();
 
+string consoleLogOutputTemplate = "[{Timestamp:HH:mm:ss} {Level:u3}][{SourceContext}] {Message:lj}{NewLine}{Exception}";
+
 Log.Logger = new LoggerConfiguration()
     .Enrich.WithExceptionDetails()
-    .WriteTo.Console()
+    .Enrich.FromLogContext()
+    .WriteTo.Console(outputTemplate: consoleLogOutputTemplate)
     .WriteTo.File("/persistent/logs/omniworker.log", 
         rollingInterval: RollingInterval.Day,
         rollOnFileSizeLimit: true,
