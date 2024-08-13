@@ -10,7 +10,7 @@ public class InstancesConfigManager(PersistentStorage persistentStorage, ILogger
             .Where(x => x.StartsWith(_instanceConfigPrefix))
             .ToList();
 
-        if (!configs.Contains("0"))
+        if (!configs.Contains($"{_instanceConfigPrefix}0.yaml"))
         {
             await CreateDefaultInstanceConfig();
             configs.Add("0");
@@ -91,6 +91,7 @@ public class InstancesConfigManager(PersistentStorage persistentStorage, ILogger
 
     private async Task CreateDefaultInstanceConfig()
     {
+        logger.LogInformation("Creating default instance config");
         InstanceConfig defaultConfig = await CreateNewInstance("Default Worker", 0);
         await SaveInstanceConfig(defaultConfig);
     }

@@ -226,6 +226,7 @@ public partial class Home
             throw new InvalidOperationException("Selected instance is null");
         }
         
+        await SaveWorkerConfig(false);
         await _selectedInstance.OmniControllerMain.StopWorkers();
     }
 }
