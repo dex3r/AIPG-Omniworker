@@ -7,10 +7,15 @@ public partial class Home
 {
     private string? GridApiKey { get; set; }
     private string? WorkerName { get; set; }
-    private string? ModelName { get; set; }
     private string? HuggingFaceToken { get; set; }
     private string? WalletAddress { get; set; }
+    private bool AutoUpdateImageWorkers { get; set; }
+    
+    private string? TextModelName { get; set; }
     private WorkerType WorkerType { get; set; } = OmniController.WorkerType.Auto;
+    private DeviceType DeviceType { get; set; }
+    private string DevicesIds { get; set; }
+    
     private OmniControllerMain? OmniControllerMain => _selectedInstance?.OmniControllerMain;
 
     public int SelectedInstanceId
@@ -38,14 +43,14 @@ public partial class Home
         
         SelectedInstanceId = 0;
         await OnSelectedInstanceChanged();
-        
+
         try
         {
             var userConfig = await UserConfigManager.LoadConfig();
             GridApiKey = userConfig.ApiKey;
             WorkerName = userConfig.WorkerName;
-            ModelName = userConfig.TextModelName;
             HuggingFaceToken = userConfig.HuggingFaceToken;
+            AutoUpdateImageWorkers = userConfig.AutoUpdateImageWorker;
         }
         catch (Exception e)
         {
@@ -87,6 +92,11 @@ public partial class Home
             _selectedInstance.OmniControllerMain.StateChangedEvent += OnOmniControllerStateChanged;
         
             WorkerType = _selectedInstance.Config.WorkerType;
+            TextModelName = _selectedInstance.Config.TextWorkerModelName;
+            DeviceType = _selectedInstance.Config.DeviceType;
+            DevicesIds = _selectedInstance.Config.Devices;
+            
+            StateHasChanged();
         }
         finally
         {
@@ -110,6 +120,18 @@ public partial class Home
         try
         {
             _selectedInstance.Config.WorkerType = WorkerType;
+            _selectedInstance.Config.TextWorkerModelName = TextModelName;
+            _selectedInstance.Config.DeviceType = DeviceType;
+
+            if (DevicesIdsParser.TryParse(DevicesIds, out _))
+            {
+                _selectedInstance.Config.Devices = DevicesIds;
+            }
+            else
+            {
+                _selectedInstance.OmniControllerMain.Output.Add("Failed to parse Devices IDs");
+            }
+
             if (setAutostart.HasValue)
             {
                 _selectedInstance.Config.AutoStartWorker = setAutostart.Value;
@@ -132,8 +154,8 @@ public partial class Home
             UserConfig userConfig = await UserConfigManager.LoadConfig();
             userConfig.ApiKey = GridApiKey;
             userConfig.WorkerName = WorkerName;
-            userConfig.TextModelName = ModelName;
-            userConfig.HuggingFaceToken = HuggingFaceToken; ;
+            userConfig.HuggingFaceToken = HuggingFaceToken;
+            userConfig.AutoUpdateImageWorker = AutoUpdateImageWorkers;
 
             await UserConfigManager.SaveConfig(userConfig);
         }
@@ -152,7 +174,7 @@ public partial class Home
             throw new InvalidOperationException("Selected instance is null");
         }
         
-        if (string.IsNullOrWhiteSpace(ModelName))
+        if (string.IsNullOrWhiteSpace(TextModelName))
         {
             _selectedInstance.OmniControllerMain.Output.Add("Model Name is required!");
             return;
@@ -167,6 +189,27 @@ public partial class Home
         if (string.IsNullOrWhiteSpace(WorkerName))
         {
             _selectedInstance.OmniControllerMain.Output.Add("Worker Name is required!");
+            return;
+        }
+
+        if (DeviceType == DeviceType.CPU && WorkerType != WorkerType.Image)
+        {
+            _selectedInstance.OmniControllerMain.Output.Add("CPU is only supported for Image Worker.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(DevicesIds))
+        {
+            _selectedInstance.OmniControllerMain.Output.Add("Devices IDs are required!");
+            return;
+        }
+        
+        if(!DevicesIdsParser.TryParse(DevicesIds, out _))
+        {
+            _selectedInstance.OmniControllerMain.Output.Add(
+                """
+                Invalid Devices IDs! Valid examples: "0", "0,1", "1,2,3", etc.
+                """);
             return;
         }
 

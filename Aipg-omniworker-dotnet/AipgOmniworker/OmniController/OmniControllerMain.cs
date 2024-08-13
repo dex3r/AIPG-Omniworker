@@ -101,8 +101,9 @@ public class OmniControllerMain
         await _bridgeConfigManager.SaveConfig(bridgeConfig);
         
         TextWorkerConfig textWorkerConfig = await _textWorkerConfigManager.LoadConfig();
-        textWorkerConfig.model_name = userConfig.TextModelName;
+        textWorkerConfig.model_name = _instance.Config.TextWorkerModelName;
         textWorkerConfig.hugging_face_token = userConfig.HuggingFaceToken;
+        textWorkerConfig.gpus = _instance.Config.Devices.Trim();
         await _textWorkerConfigManager.SaveConfig(textWorkerConfig);
         
         ImageWorkerConfig imageWorkerConfig = await _imageWorkerConfigManager.LoadConfig();

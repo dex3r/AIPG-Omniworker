@@ -23,7 +23,7 @@ public class PersistentStorage
 
     public async Task CopyConfigFromPersistentStorage(string configName, string outputPath)
     {
-        File.Copy(GetConfigPath(configName), outputPath);
+        File.Copy(GetConfigPath(configName), outputPath, true);
     }
     
     public string GetConfigPath(string configName) => Path.Combine(ConfigsPath, configName);
