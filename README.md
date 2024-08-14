@@ -21,7 +21,7 @@ This repository allows you to set up an AIPG Worker.
 1. Install Docker and Nvidia software from the steps above.
 1. Clone this repository.
 1. Clone submodules: `git submodule init` and `git submodule update`
-1. Run the command from https://github.com/dex3r/AIPG-Omniworker#development section below.
+1. Run the command from #Development section below.
 
 # Web configuration
 
