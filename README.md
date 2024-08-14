@@ -1,4 +1,4 @@
-This repository allows you to set up an AIPG Worker.
+This is a repository for AIPG Omniworker. It's a tool for easy setup and management of single or multiple Image and/or Text workers in [AIPG Network](https://aipowergrid.io/). 
 
 # Installing
 
