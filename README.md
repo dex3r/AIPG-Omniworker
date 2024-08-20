@@ -55,7 +55,7 @@ Configuration files can be found in a docker volume.
 # Features
 
 - [x] Works on Windows with WSL Docker
-- [x] Works on Linux (tested on Debian 22.04 with newest drivers and nvidia toolkit)
+- [x] Works on Linux
 - [x] Basic Web Control Panel
 - [x] Ability to start from CLI without interacting with Web Control Panel
 - [x] Saving config, downloaded models and logs between containers in Docker Volume
