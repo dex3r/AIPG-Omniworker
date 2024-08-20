@@ -12,6 +12,8 @@ public partial class Home
     private bool AutoUpdateImageWorkers { get; set; }
     
     private string? TextModelName { get; set; }
+    private List<string> AdditionalImageModelNames { get; set; } = new();
+    private string NewImageModel { get; set; } = string.Empty;
     private WorkerType WorkerType { get; set; } = OmniController.WorkerType.Auto;
     private DeviceType DeviceType { get; set; }
     private string DevicesIds { get; set; }
@@ -93,6 +95,7 @@ public partial class Home
         
             WorkerType = _selectedInstance.Config.WorkerType;
             TextModelName = _selectedInstance.Config.TextWorkerModelName;
+            AdditionalImageModelNames = _selectedInstance.Config.ImageWorkerModelsNames?.ToList() ?? new();
             DeviceType = _selectedInstance.Config.DeviceType;
             DevicesIds = _selectedInstance.Config.Devices;
             
@@ -121,6 +124,7 @@ public partial class Home
         {
             _selectedInstance.Config.WorkerType = WorkerType;
             _selectedInstance.Config.TextWorkerModelName = TextModelName;
+            _selectedInstance.Config.ImageWorkerModelsNames = AdditionalImageModelNames.ToArray();
             _selectedInstance.Config.DeviceType = DeviceType;
 
             if (DevicesIdsParser.TryParse(DevicesIds, out _))
@@ -174,10 +178,26 @@ public partial class Home
             throw new InvalidOperationException("Selected instance is null");
         }
         
-        if (string.IsNullOrWhiteSpace(TextModelName))
+        if ((_selectedInstance.Config.WorkerType == WorkerType.Auto || _selectedInstance.Config.WorkerType == WorkerType.Text)
+            && string.IsNullOrWhiteSpace(TextModelName))
         {
-            _selectedInstance.OmniControllerMain.Output.Add("Model Name is required!");
+            _selectedInstance.OmniControllerMain.Output.Add("Text Model Name is required!");
             return;
+        }
+        
+        if (_selectedInstance.Config.WorkerType == WorkerType.Auto || _selectedInstance.Config.WorkerType == WorkerType.Image)
+        {
+            if (AdditionalImageModelNames == null || AdditionalImageModelNames.Count == 0)
+            {
+                _selectedInstance.OmniControllerMain.Output.Add("At least one Image Model Name is required!");
+                return;
+            }
+
+            if (AdditionalImageModelNames.Any(string.IsNullOrWhiteSpace))
+            {
+                _selectedInstance.OmniControllerMain.Output.Add("Some Image Model Names entries are empty!");
+                return;
+            }
         }
 
         if (string.IsNullOrWhiteSpace(GridApiKey))
@@ -228,5 +248,22 @@ public partial class Home
         
         await SaveWorkerConfig(false);
         await _selectedInstance.OmniControllerMain.StopWorkers();
+    }
+    
+    private void AddNewImageModel()
+    {
+        if (!string.IsNullOrEmpty(NewImageModel))
+        {
+            AdditionalImageModelNames.Add(NewImageModel);
+            NewImageModel = string.Empty;
+        }
+    }
+    
+    private void RemoveImageModel(int index)
+    {
+        if (index >= 0 && index < AdditionalImageModelNames.Count)
+        {
+            AdditionalImageModelNames.RemoveAt(index);
+        }
     }
 }

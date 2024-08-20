@@ -123,6 +123,7 @@ public class OmniControllerMain
         imageWorkerConfig.alchemist_name = userConfig.WorkerName;
         imageWorkerConfig.disable_terminal_ui = true;
         imageWorkerConfig.dreamer_name = userConfig.WorkerName;
+        imageWorkerConfig.models_to_load = _instance.Config.ImageWorkerModelsNames ?? new string[0];
         await _imageWorkerConfigManager.SaveConfig(imageWorkerConfig);
     }
     
@@ -371,7 +372,7 @@ public class OmniControllerMain
         
         await _imageWorkerController.StartImageWorker();
         
-        AddOutput("Image worker started");
+        AddOutput("Image worker started, downloading models... (it may take a few minutes)");
         Status = WorkerStatus.Running;
     }
 

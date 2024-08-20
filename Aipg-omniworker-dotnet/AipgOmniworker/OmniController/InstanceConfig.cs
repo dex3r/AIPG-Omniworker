@@ -10,4 +10,6 @@ public class InstanceConfig
     public string Devices { get; set; } = "0";
     public string TextWorkerModelName { get; set; } = "TheBloke/Mistral-7B-v0.1-GPTQ";
     public bool AutoStartWorker { get; set; }
+    public string ImageWorkerModelName { get; set; } = "s";
+    public string[]? ImageWorkerModelsNames { get; set; } = ["Juggernaut XL"];
 }

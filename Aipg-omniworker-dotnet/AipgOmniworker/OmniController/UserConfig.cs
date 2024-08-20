@@ -7,7 +7,7 @@ namespace AipgOmniworker.OmniController;
 public class UserConfig
 {
     public string? ApiKey { get; set; }
-    public string? WorkerName { get; set; }
+    public string? WorkerName { get; set; } = Guid.NewGuid() + ".at.omniworker";
     public string? HuggingFaceToken { get; set; }
-    public bool AutoUpdateImageWorker { get; set; } = true;
+    public bool AutoUpdateImageWorker { get; set; }
 }

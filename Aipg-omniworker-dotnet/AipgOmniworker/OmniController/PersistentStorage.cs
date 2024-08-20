@@ -41,6 +41,11 @@ public class PersistentStorage
         {
             await _filesystemSemaphore.WaitAsync();
             
+            if (!Directory.Exists(ConfigsPath))
+            {
+                return Array.Empty<string>();
+            }
+            
             return Directory.GetFiles(ConfigsPath).Select(Path.GetFileName).ToArray();
         }
         finally
@@ -54,6 +59,13 @@ public class PersistentStorage
         try
         {
             await _filesystemSemaphore.WaitAsync();
+            
+            string directory = Path.GetDirectoryName(outputPath);
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+            
             File.Copy(GetConfigPath(configName), outputPath, true);
         }
         finally

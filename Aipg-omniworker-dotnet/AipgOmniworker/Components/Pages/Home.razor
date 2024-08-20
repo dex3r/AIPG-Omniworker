@@ -10,9 +10,9 @@
 
 <label for="GridApiKey">Grid Api Key:</label><br/>
 <input type="text" id="GridApiKey" @bind="@GridApiKey" /><br/>
-If you don't have Grid API Key get one from <a href="https://api.aipowergrid.io/register">https://api.aipowergrid.io/register</a><br/>
+If you don't have Grid API Key get one from <a target="_blank" href="https://api.aipowergrid.io/register">https://api.aipowergrid.io/register</a><br/>
 <br/>
-<label for="ScribeName">Worker name (publicly visible):</label><br/>
+<label for="ScribeName">Worker name (has to be unique, is publicly visible):</label><br/>
 <input type="text" id="ScribeName" @bind="@WorkerName" /><br/>
 <br/>
 <label for="HuggingFaceToken">Hugging Face Token:</label><br/>
@@ -65,6 +65,26 @@ Required for some models, like Llamas. Create HuggingFace account and get one fr
 {
     <label for="ModelName">Text model Name:</label><br/>
     <input type="text" id="ModelName" @bind="@TextModelName" /><br/>
+    <br/>
+}
+
+@if(WorkerType == WorkerType.Auto || WorkerType == WorkerType.Image)
+{
+    <label>Image models:</label><br />
+    <ul>
+        @foreach (var (model, index) in AdditionalImageModelNames.Select((model, index) => (model, index)))
+        {
+            <li>
+                <input type="text" @bind="AdditionalImageModelNames[index]" />
+                <button type="button" @onclick="() => RemoveImageModel(index)">Remove</button>
+            </li>
+        }
+    </ul>
+    
+    <!-- Input for adding a new image model -->
+    <input type="text" placeholder="Add new Image model" @bind="NewImageModel" />
+    <button type="button" @onclick="AddNewImageModel">Add Image Model</button>
+    <br/>
     <br/>
 }
 
