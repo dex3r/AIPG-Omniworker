@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Security.Principal;
 using System.Text;
 using System.Windows;
@@ -58,17 +59,20 @@ public partial class MainWindow : Window
         
         try
         {
-            //if (await CheckPrivilagesRestartIfNeeded())
+            if (await CheckPrivilagesRestartIfNeeded())
             {
-                //return;
+                return;
             }
             
             await InstallChocolatey();
             await InstallWsl();
             await InstallDocker();
             await ValidateDocker();
+            await InstallCuda();
             
             await InstallOmniworker();
+            
+            await WaitForOmniworker();
             await OpenBrowser();
         }
         catch (Exception e)
@@ -85,6 +89,48 @@ public partial class MainWindow : Window
                 InstallButton.IsEnabled = true;
                 InstallButton.Content = "Retry Installation";
             });
+        }
+    }
+
+    private async Task InstallCuda()
+    {
+        var output = await RunProcessAndGetOutput("nvidia-smi", "");
+        if(output.Any(x => x != null && (
+               x.Contains("CUDA Version: 12.6", StringComparison.InvariantCultureIgnoreCase)
+               || x.Contains("CUDA Version: 12.5", StringComparison.InvariantCultureIgnoreCase)
+               || x.Contains("CUDA Version: 12.4", StringComparison.InvariantCultureIgnoreCase)
+               || x.Contains("CUDA Version: 12.3", StringComparison.InvariantCultureIgnoreCase)
+               )))
+        {
+            AppendLine("CUDA already installed");
+            return;
+        }
+        
+        await InstallPackage("cuda --version 12.6.0.560");
+    }
+
+    private async Task WaitForOmniworker()
+    {
+        while (true)
+        {
+            await Task.Delay(1000);
+            
+            string address = "http://localhost:7870";
+            
+            try
+            {
+                using var client = new HttpClient();
+                var response = await client.GetAsync(address);
+                if (response.IsSuccessStatusCode)
+                {
+                    AppendLine("Omniworker is running!");
+                    return;
+                }
+            }
+            catch (Exception)
+            {
+                AppendLine("Omniworker is not running yet, waiting...");
+            }
         }
     }
 
@@ -168,6 +214,13 @@ public partial class MainWindow : Window
             AppendLine("WSL2 already installed");
             return;
         }
+        
+        if(await TryToRunProcess("wsl", "--install --no-launch --web-download --no-distribution"))
+        {
+            return;
+        }
+        
+        AppendLine("Failed to install WSL2 with build-in Windows feature. Trying to install with Chocolatey...");
         
         await InstallPackage("wsl2");
     }
@@ -302,7 +355,20 @@ public partial class MainWindow : Window
     {
         Output.Dispatcher.Invoke(() =>
         {
+            text = text.ReplaceLineEndings();
+            
+            if(text.StartsWith(Environment.NewLine))
+            {
+                text = text.Substring(Environment.NewLine.Length);
+            }
+            
+            if(text.EndsWith(Environment.NewLine))
+            {
+                text = text.Substring(0, text.Length - Environment.NewLine.Length);
+            }
+            
             Output.AppendText(text + "\n");
+            Output.ScrollToEnd();
         });
     }
 }
