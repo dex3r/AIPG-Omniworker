@@ -62,7 +62,7 @@ public class ImageWorkerController(Instance instance, UserConfigManager userConf
         PrintGridTextWorkerOutput($"Script exists confirmed, running at path: {fullPath}");
         
         string devicesString = instance.Config.Devices.Trim();
-        string instanceName = $"{userConfig.WorkerName}#{instance.InstanceId}";
+        string instanceName = instance.GetUniqueInstanceName(await userConfigManager.LoadConfig());
         
         Process? process = Process.Start(new ProcessStartInfo
         {

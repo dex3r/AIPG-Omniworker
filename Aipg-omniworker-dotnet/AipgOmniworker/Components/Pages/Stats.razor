@@ -1,0 +1,46 @@
+﻿@page "/Stats"
+@rendermode InteractiveServer
+@using System.Collections.Generic
+@using System.Timers
+@using AipgOmniworker.OmniController
+@inject StatsCollector statsCollector
+@inject UserConfigManager UserConfigManager;
+
+<h3>Live Workers Stats</h3>
+
+<ul>
+    @if (Instances == null)
+    {
+        <li>Loading stats...</li>
+    }
+    else
+    {
+        @foreach (WorkerStats workerStats in Instances ?? Array.Empty<WorkerStats>())
+        {
+            <li>
+                <strong>Instance Local ID:</strong> @workerStats.Instance.InstanceId
+                <br/>
+                <strong>Instance Local Name:</strong> @workerStats.Instance.Config.InstanceName
+                <br/>
+                <strong>Worker API Name:</strong> @workerStats.Instance.GetUniqueInstanceName(UserConfig)
+                <br/>
+                <strong>Worker API ID:</strong> @(workerStats.WorkerId ?? "Unknown")
+                <br/>
+                <strong>Status:</strong>
+                <span class="@GetStatusClass(workerStats.Instance.OmniControllerMain.Status)">
+                    @GetStatusIcon(workerStats.Instance.OmniControllerMain.Status) @workerStats.Instance.OmniControllerMain.Status
+                </span>
+                <br/>
+                <strong>Worker Type:</strong> @workerStats.Instance.Config.WorkerType
+                <br/>
+                <strong>Worker Device Type:</strong> @workerStats.Instance.Config.DeviceType
+                <br/>
+                <strong>Worker Devices:</strong> @workerStats.Instance.Config.Devices
+                <br/>
+                <strong>Generation Done:</strong> @workerStats.RequestsFulfilled
+                <br/>
+                <strong>Kudos Received:</strong> @workerStats.KudosReceived
+            </li>
+        }
+    }
+</ul>

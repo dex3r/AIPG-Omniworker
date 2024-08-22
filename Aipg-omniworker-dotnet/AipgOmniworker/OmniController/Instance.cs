@@ -38,4 +38,9 @@ public class Instance
     {
         await _instancesConfigManager.SaveInstanceConfig(Config);
     }
+
+    public string GetUniqueInstanceName(UserConfig userConfig)
+    {
+        return $"{userConfig.WorkerName}#{InstanceId}";
+    }
 }
