@@ -67,15 +67,14 @@ public class ImageWorkerController(Instance instance, UserConfigManager userConf
         Process? process = Process.Start(new ProcessStartInfo
         {
             FileName = fullPath,
-            //Arguments = $"-n {instanceName}",
+            Arguments = $"-n {instanceName}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             WorkingDirectory = WorkingDirectory,
             Environment =
             {
                 {"AI_HORDE_URL", "https://api.aipowergrid.io/api/"},
-                {"CUDA_VISIBLE_DEVICES",  devicesString},
-                {"AIWORKER_DREAMER_NAME", instanceName}
+                {"CUDA_VISIBLE_DEVICES",  devicesString}
             }
         });
         

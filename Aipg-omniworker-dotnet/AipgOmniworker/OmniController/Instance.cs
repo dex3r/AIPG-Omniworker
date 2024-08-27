@@ -8,6 +8,7 @@ public class Instance
     public AphroditeController AphroditeController { get; private set; }
     public GridWorkerController GridWorkerController { get; private set; }
     public ImageWorkerController ImageWorkerController { get; private set; }
+    public string? TempWorkerNamePostfix { get; set; }
 
     private InstancesConfigManager _instancesConfigManager;
     
@@ -41,6 +42,13 @@ public class Instance
 
     public string GetUniqueInstanceName(UserConfig userConfig)
     {
-        return $"{userConfig.WorkerName}#{InstanceId}";
+        if (TempWorkerNamePostfix == null)
+        {
+            return $"{userConfig.WorkerName}#{InstanceId}";
+        }
+        else
+        {
+            return $"{userConfig.WorkerName}#{InstanceId}-{TempWorkerNamePostfix}";
+        }
     }
 }
