@@ -60,7 +60,7 @@ Configuration files can be found in a docker volume.
 - [x] Ability to start from CLI without interacting with Web Control Panel
 - [x] Saving config, downloaded models and logs between containers in Docker Volume
 - [x] Watchdog to look for worker process crash
-- [ ] Watchdog to check worker health
+- [ x Watchdog to check worker health
 - [x] Periodic auto-restart
 - [x] Image worker support
 - [x] Text worker support
@@ -68,9 +68,10 @@ Configuration files can be found in a docker volume.
 - [ ] Automatic worker selection based on grid image/worker needs (how long is the image/text jobs queue)
 - [x] Multiple GPU support
 - [ ] CUDA not installed detection and instructions
-- [ ] Text worker/Aphrodide/Image worker/API error detection
-- [ ] Windows EXE installer with automatic Docker and CUDA installation
-- [ ] Worker stats and graphs
+- [x] Text worker/Aphrodide/Image worker/API error detection
+- [WIP] Windows EXE installer with automatic Docker and CUDA installation
+- [x] Worker stats
+- [ ] worker stats graphs
 
 # Development
 
