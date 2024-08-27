@@ -181,7 +181,7 @@ public class OmniControllerMain
         await EnsureUniqueWorkerName();
         
         AddOutput($"Starting worker based on type from config: {_instance.Config.WorkerType}");
-        WorkerType workerType = await StartWorkerBasedOnType(_instance.Config.WorkerType);
+        WorkerType workerType = await StartWorkerBasedOnType(_instance.Config.WorkerType, token);
         
         if(Status == WorkerStatus.Running || Status == WorkerStatus.Starting)
         {
@@ -217,6 +217,25 @@ public class OmniControllerMain
     }
 
     private async Task WatchdogMethod(WorkerType workerType, CancellationToken stoppingToken)
+    {
+        try
+        {
+            AddOutput("Watchdog method started.");
+
+            await WatchdogMethodUnsafe(workerType, stoppingToken);
+        }
+        catch (Exception e)
+        {
+            AddOutput("Exception in Watchdog method:");
+            AddOutput(e.ToString());
+        }
+        finally
+        {
+           AddOutput("Watchdog method stopped!!"); 
+        }
+    }
+
+    private async Task WatchdogMethodUnsafe(WorkerType workerType, CancellationToken stoppingToken)
     {
         DateTime startTime = DateTime.Now;
         TimeSpan maxRunTime = TimeSpan.FromHours(1);
@@ -255,6 +274,10 @@ public class OmniControllerMain
                     RestartSilentWithDelay(stoppingToken);
                     return;
                 }
+            }
+            else
+            {
+                throw new Exception($"Unexpected worker type in Watchdog method: {workerType}");
             }
 
             if (!await IsVisibleFromApi(true))
@@ -351,27 +374,27 @@ public class OmniControllerMain
         Status = WorkerStatus.Stopped;
     }
 
-    private async Task<WorkerType> StartWorkerBasedOnType(WorkerType workerType)
+    private async Task<WorkerType> StartWorkerBasedOnType(WorkerType workerType, CancellationToken cancellationToken)
     {
         AddOutput($"Starting worker of type: {workerType}");
         
         switch (workerType)
         {
             case WorkerType.Auto:
-                return await StartWorkerAutoSelect();
+                return await StartWorkerAutoSelect(cancellationToken);
                 break;
             case WorkerType.Text:
-                await StartTextWorker();
+                await StartTextWorker(cancellationToken);
                 return WorkerType.Text;
             case WorkerType.Image:
-                await StartImageWorker();
+                await StartImageWorker(cancellationToken);
                 return WorkerType.Image;
             default:
                 throw new Exception($"Unknown worker type: {workerType}");
         }
     }
 
-    private async Task<WorkerType> StartWorkerAutoSelect()
+    private async Task<WorkerType> StartWorkerAutoSelect(CancellationToken cancellationToken)
     {
         WorkerType workerType = await FetchAutoPreferredWorkerType();
 
@@ -380,7 +403,7 @@ public class OmniControllerMain
             throw new Exception("Auto worker type value cannot be Auto itself");
         }
         
-        return await StartWorkerBasedOnType(workerType);
+        return await StartWorkerBasedOnType(workerType, cancellationToken);
     }
     
     private async Task<WorkerType> FetchAutoPreferredWorkerType()
@@ -433,29 +456,29 @@ public class OmniControllerMain
         return workers;
     }
 
-    private async Task StartImageWorker()
+    private async Task StartImageWorker(CancellationToken cancellationToken)
     {
         AddOutput("Starting image worker...");
         Status = WorkerStatus.Starting;
         
-        await _imageWorkerController.StartImageWorker();
+        await _imageWorkerController.StartImageWorker(cancellationToken);
         
         AddOutput("Image worker process, downloading models... (it may take a few minutes)");
         AddOutput("Waiting for worker to appear on the API...");
         
-        await WaitForWorkerToAppearOnApi();
+        await WaitForWorkerToAppearOnApi(cancellationToken);
         
         AddOutput("Image worker started!");
         
         Status = WorkerStatus.Running;
     }
 
-    private async Task StartTextWorker()
+    private async Task StartTextWorker(CancellationToken cancellationToken)
     {
         AddOutput("Starting Aphrodite and downloading model... (this may take a few minutes)");
-        await _aphroditeController.StarAphrodite();
+        await _aphroditeController.StarAphrodite(cancellationToken);
 
-        bool started = await _aphroditeController.WaitForAphriditeToStart(_startCancellation.Token);
+        bool started = await _aphroditeController.WaitForAphriditeToStart(cancellationToken);
 
         if (!started)
         {
@@ -468,25 +491,27 @@ public class OmniControllerMain
         AddOutput("Starting Grid Text Worker...");
         Status = WorkerStatus.Starting;
         
-        await _gridWorkerController.StartGridTextWorker();
+        await _gridWorkerController.StartGridTextWorker(cancellationToken);
         
         AddOutput("Text Worker process started.");
         
         AddOutput("Waiting for worker to appear on the API...");
-        await WaitForWorkerToAppearOnApi();
+        await WaitForWorkerToAppearOnApi(cancellationToken);
         
+        cancellationToken.ThrowIfCancellationRequested();
         AddOutput("Text Worker started!");
-        
         Status = WorkerStatus.Running;
     }
 
-    private async Task WaitForWorkerToAppearOnApi()
+    private async Task WaitForWorkerToAppearOnApi(CancellationToken cancellationToken)
     {
         TimeSpan timeout = TimeSpan.FromHours(1);
         DateTime startTime = DateTime.Now;
         
         do
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             bool visible = await IsVisibleFromApi();
       
             if (visible)

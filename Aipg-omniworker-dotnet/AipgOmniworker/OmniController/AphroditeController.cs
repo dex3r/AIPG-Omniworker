@@ -25,16 +25,24 @@ public class AphroditeController
         _logger = logger;
     }
 
-    public async Task StarAphrodite()
+    public async Task StarAphrodite(CancellationToken cancellationToken)
     {
         try
         {
             await StartAphroditeInternal();
 
+            cancellationToken.Register(() =>
+            {
+                _aphroditeProcess?.Kill(true);
+                _aphroditeProcess = null;
+            });
+            
             if (_aphroditeProcess == null || _aphroditeProcess.HasExited)
             {
                 throw new Exception("Failed to start Aphrodite");
             }
+            
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (Exception e)
         {
@@ -48,7 +56,7 @@ public class AphroditeController
         while (!cancellationToken.IsCancellationRequested)
         {
             await Task.Delay(100, cancellationToken);
-
+            
             if (_aphroditeProcess == null || _aphroditeProcess.HasExited)
             {
                 return false;
@@ -57,7 +65,7 @@ public class AphroditeController
             try
             {
                 using HttpClient client = new HttpClient();
-                HttpResponseMessage response = await client.GetAsync(_address);
+                HttpResponseMessage response = await client.GetAsync(_address, cancellationToken);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -69,6 +77,7 @@ public class AphroditeController
             }
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         return false;
     }
 

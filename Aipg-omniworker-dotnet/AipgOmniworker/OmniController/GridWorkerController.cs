@@ -13,16 +13,24 @@ public class GridWorkerController(Instance instance, ILogger<GridWorkerControlle
     
     private Process? _gridTextWorkerProcess;
 
-    public async Task StartGridTextWorker()
+    public async Task StartGridTextWorker(CancellationToken cancellationToken)
     {
         try
         {
             await StartGridTextWorkerInternal();
+
+            cancellationToken.Register(() =>
+            {
+                _gridTextWorkerProcess?.Kill(true);
+                _gridTextWorkerProcess = null;
+            });
             
             if(_gridTextWorkerProcess == null || _gridTextWorkerProcess.HasExited)
             {
                 throw new Exception("Failed to start text worker");
             }
+            
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (Exception e)
         {

@@ -14,16 +14,24 @@ public class ImageWorkerController(Instance instance, UserConfigManager userConf
     
     private Process? _workerProcess;
 
-    public async Task StartImageWorker()
+    public async Task StartImageWorker(CancellationToken cancellationToken)
     {
         try
         {
             await StartWorkerInternal();
             
+            cancellationToken.Register(() =>
+            {
+                _workerProcess?.Kill(true);
+                _workerProcess = null;
+            });
+            
             if(_workerProcess == null || _workerProcess.HasExited)
             {
                 throw new Exception("Failed to start image worker");
             }
+            
+            cancellationToken.ThrowIfCancellationRequested();
         }
         catch (Exception e)
         {

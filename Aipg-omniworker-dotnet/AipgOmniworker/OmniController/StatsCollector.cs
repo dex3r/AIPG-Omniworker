@@ -46,7 +46,7 @@ public class StatsCollector(
 
         if (workerDetails == null)
         {
-            logger.LogError("Failed to find worker details for instance {InstanceName}", instance.InstanceId);
+            //logger.LogError("Failed to find worker details for instance {InstanceName}", instance.InstanceId);
             return new WorkerStats
             {
                 Instance = instance,
