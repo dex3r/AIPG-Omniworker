@@ -1,10 +1,12 @@
 ﻿using System.Collections.Concurrent;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Security.Principal;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
@@ -20,6 +22,8 @@ namespace AIPG_Omniworker_Windows_Installer;
 /// </summary>
 public partial class MainWindow : Window
 {
+    private bool _requiresRestart;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -70,31 +74,53 @@ public partial class MainWindow : Window
             await ValidateDocker();
             await InstallCuda();
             
+            if(_requiresRestart)
+            {
+                AppendLine("Installation requires restart. Please restart your computer and run the installer again.");
+                MessageBox.Show("Installation requires restart. Please restart your computer and run the installer again.");
+                return;
+            }
+            
             await InstallOmniworker();
             
             await WaitForOmniworker();
             await OpenBrowser();
+
+            string text = "Installation completed successfully! Open http://localhost:7870 in your browser to access Omniworker.";
+            AppendLine(text);
+            MessageBox.Show(text);
         }
         catch (Exception e)
         {
             AppendLine(e.StackTrace);
             AppendLine("");
             AppendLine("Installation failed:");
-            AppendLine(e.Message);
+            
+            if(e.GetType() != typeof(Exception))
+            {
+                AppendLine(e.GetType().Name + ": " + e.Message);
+            }
+            else
+            {
+                AppendLine(e.Message);
+            }
         }
         finally
         {
-            await InstallButton.Dispatcher.InvokeAsync(() =>
+            if (!_requiresRestart)
             {
-                InstallButton.IsEnabled = true;
-                InstallButton.Content = "Retry Installation";
-            });
+                await InstallButton.Dispatcher.InvokeAsync(() =>
+                {
+                    InstallButton.IsEnabled = true;
+                    InstallButton.Content = "Retry Installation";
+                });
+            }
         }
     }
 
     private async Task InstallCuda()
     {
-        var output = await RunProcessAndGetOutput("nvidia-smi", "");
+        var output = await RunProcessAndGetOutputSafe("nvidia-smi", "");
         if(output.Any(x => x != null && (
                x.Contains("CUDA Version: 12.6", StringComparison.InvariantCultureIgnoreCase)
                || x.Contains("CUDA Version: 12.5", StringComparison.InvariantCultureIgnoreCase)
@@ -107,6 +133,7 @@ public partial class MainWindow : Window
         }
         
         await InstallPackage("cuda --version 12.6.0.560");
+        _requiresRestart = true;
     }
 
     private async Task WaitForOmniworker()
@@ -173,14 +200,38 @@ public partial class MainWindow : Window
 
     private async Task OpenBrowser()
     {
-        await RunCommand("explorer", "http://localhost:7870");
+        await RunProcessAndGetExitCode("explorer", "http://localhost:7870");
     }
 
     private async Task ValidateDocker()
     {
+        if (_requiresRestart)
+        {
+            return;
+        }
+        
         if(!(await TryToRunProcess("docker", "--version")))
         {
             throw new Exception("Docker installation failed or computer needs restart. Try to restart your computer and run the installer again.");
+        }
+
+        int code = await RunProcessAndGetExitCode("docker", "ps");
+
+        if (code != 0)
+        {
+            AppendLine("Docker is not running. Trying to start Docker Desktop...");
+            
+            await RunProcessAndGetOutputSafe(@"C:\Program Files\Docker\Docker\Docker Desktop.exe", "");
+            
+            AppendLine("Waiting for Docker engine to start...");
+            await Task.Delay(10000);
+            
+            code = await RunProcessAndGetExitCode("docker", "ps");
+            
+            if (code != 0)
+            {
+                throw new Exception("Docker is not running. Please start Docker Desktop and start the Docker Engine and retry the installation.");
+            }
         }
         
         AppendLine("Docker installed successfully");
@@ -196,53 +247,94 @@ public partial class MainWindow : Window
 
     private async Task InstallDocker()
     {
-        var output = await RunProcessAndGetOutput("docker", "--version");
-        if(output.Any(x => x != null && x.Contains("Docker version")))
+        IReadOnlyList<string?> output = null;
+        
+        try
+        {
+            output = await RunProcessAndGetOutput("docker", "--version");
+        }
+        catch (Win32Exception)
+        {
+            AppendLine("Docker not found.");
+        }
+        
+        if(output != null && output.Any(x => x != null && x.Contains("Docker version")))
         {
             AppendLine("Docker already installed");
             return;
         }
         
-        await InstallPackage("docker-desktop");
+        await InstallPackage("docker-desktop", true);
+        _requiresRestart = true;
     }
 
     private async Task InstallWsl()
     {
-        var processResults = await RunProcessAndGetOutput("wsl", "--version");
+        var processResults = await RunProcessAndGetOutputSafe("wsl", "--version");
         if (processResults.Any(x => x != null && x.Contains("WSL version: 2.", StringComparison.InvariantCultureIgnoreCase)))
         {
             AppendLine("WSL2 already installed");
             return;
         }
         
-        if(await TryToRunProcess("wsl", "--install --no-launch --web-download --no-distribution"))
+        AppendLine("WSL2 Installation not found. Trying to install WSL2 with a build-in windows tool...");
+
+        try
         {
-            return;
+            if(await TryToRunProcess("wsl", "--install --no-launch --web-download --no-distribution"))
+            {
+                return;
+            }
+        }
+        catch (Win32Exception e)
+        {
+            AppendLine($"Failed to install WSL2 with build-in Windows feature: {e.Message}");
+            AppendLine("Trying to install WSL2 with Chocolatey...");
         }
         
-        AppendLine("Failed to install WSL2 with build-in Windows feature. Trying to install with Chocolatey...");
-        
         await InstallPackage("wsl2");
+        _requiresRestart = true;
     }
 
-    private async Task InstallPackage(string packageName)
+    private async Task InstallPackage(string packageName, bool force = false)
     {
-        await RunCommand("choco", $"install {packageName} -y");
+        if (force)
+        {
+            await RunCommand("choco", $"install {packageName} -y -force");
+        }
+        else
+        {
+            await RunCommand("choco", $"install {packageName} -y");
+        }
     }
 
     private async Task InstallChocolatey()
     {
-        var output = await RunProcessAndGetOutput("choco", "");
+        var output = await RunProcessAndGetOutputSafe("choco", "");
         if (output.Any(x => x != null && x.Contains("Chocolatey v")))
         {
             AppendLine("Chocolatey already installed");
             return;
         }
         
+        AppendLine("Chocolatey not found.");
         AppendLine("Installing Chocolatey...");
 
         await RunCommand("powershell.exe",
             "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iwr https://community.chocolatey.org/install.ps1 -UseBasicParsing | iex");
+
+        string path = Environment.GetEnvironmentVariable("PATH")!;
+        path += @";C:\ProgramData\chocolatey\bin";
+        Environment.SetEnvironmentVariable("PATH", path);
+        
+        output = await RunProcessAndGetOutputSafe("choco", "");
+        if (output.Any(x => x != null && x.Contains("Chocolatey v")))
+        {
+            AppendLine("Chocolatey installed successfully");
+            return;
+        }
+        
+        throw new Exception("Failed to install Chocolatey");
     }
 
     private async Task RunCommand(string path, string arguments)
@@ -303,6 +395,18 @@ public partial class MainWindow : Window
         await process.WaitForExitAsync();
 
         return process.ExitCode;
+    }
+
+    private async Task<IReadOnlyList<string?>> RunProcessAndGetOutputSafe(string path, string arguments)
+    {
+        try
+        {
+            return await RunProcessAndGetOutput(path, arguments);
+        }
+        catch (Win32Exception e)
+        {
+            return new[] {e.Message};
+        }
     }
     
     private async Task<IReadOnlyList<string?>> RunProcessAndGetOutput(string path, string arguments)
@@ -365,6 +469,11 @@ public partial class MainWindow : Window
             if(text.EndsWith(Environment.NewLine))
             {
                 text = text.Substring(0, text.Length - Environment.NewLine.Length);
+            }
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return;
             }
             
             Output.AppendText(text + "\n");

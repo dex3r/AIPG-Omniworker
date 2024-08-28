@@ -9,7 +9,14 @@
     <Grid>
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="10">
             <TextBlock Text="AIPG Omniworker Installer" HorizontalAlignment="Center" Margin="0,10,0,10" FontSize="20"/>
-            <RichTextBox Name="Output" IsReadOnly="True" VerticalScrollBarVisibility="Visible" Height="300" Width="600" Margin="0,10,0,10"/>
+            <RichTextBox Name="Output" IsReadOnly="True" VerticalScrollBarVisibility="Visible" Height="300" Width="600" Margin="0,10,0,10">
+                <RichTextBox.Resources>
+                    <Style TargetType="{x:Type Paragraph}">
+                        <Setter Property="Margin" Value="0" />
+                    </Style>
+                </RichTextBox.Resources>
+            </RichTextBox>
+            <TextBlock Text="Installation may take up to 15 minutes depending on your internet connection speed." HorizontalAlignment="Center" Margin="0,2,0,8" />
             <Button Name="InstallButton" Click="ButtonBase_OnClick" Width="100" Height="30" HorizontalAlignment="Center">Install</Button>
         </StackPanel>
     </Grid>
