@@ -83,7 +83,7 @@ Configuration files can be found in a docker volume.
 - [x] Multiple GPU support
 - [ ] CUDA not installed detection and instructions
 - [x] Text worker/Aphrodide/Image worker/API error detection
-- [ ] Windows EXE installer with automatic Docker and CUDA installation
+- [x] Windows EXE installer with automatic Docker and CUDA installation
 - [x] Worker stats
 - [ ] worker stats graphs
 
