@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace AipgOmniworker.OmniController;
 
-public class GridWorkerController(Instance instance, ILogger<GridWorkerController> logger)
+public class GridWorkerController(Instance instance, ILogger<GridWorkerController> logger, UserConfigManager userConfigManager)
 {
     public List<string> GridTextWorkerOutput { get; private set; } = new();
 
@@ -42,6 +42,9 @@ public class GridWorkerController(Instance instance, ILogger<GridWorkerControlle
     private async Task StartGridTextWorkerInternal()
     {
         PrintGridTextWorkerOutput("Starting grid text worker...");
+        
+        string devicesString = instance.Config.Devices.Trim();
+        string instanceName = instance.GetUniqueInstanceName(await userConfigManager.LoadConfig());
 
         await Task.Delay(200);
         
@@ -50,11 +53,16 @@ public class GridWorkerController(Instance instance, ILogger<GridWorkerControlle
             //FileName = "/usr/bin/python3",
             //Arguments = "-s bridge_scribe.py",
             FileName = "/worker/run-worker.sh",
+            Arguments = $"-n {instanceName}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             //UseShellExecute = false,
             WorkingDirectory = WorkingDirectory,
-            Environment = { { "DISABLE_TERMINAL_UI", "true" } }
+            Environment =
+            {
+                { "DISABLE_TERMINAL_UI", "true" },
+                { "CUDA_VISIBLE_DEVICES",  devicesString }
+            }
         });
         
         if (process == null)

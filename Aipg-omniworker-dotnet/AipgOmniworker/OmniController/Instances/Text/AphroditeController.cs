@@ -12,15 +12,19 @@ public class AphroditeController
 
     public string WorkingDirectory => "/worker";
 
+    private readonly UserConfigManager _userConfigManager;
+    private readonly Instance _instance;
     private readonly TextWorkerConfigManager _textWorkerConfigManager;
     private readonly ILogger<AphroditeController> _logger;
     private Process? _aphroditeProcess;
 
     private readonly string _address = "http://localhost:2242";
     
-    public AphroditeController(Instance instance,
+    public AphroditeController(UserConfigManager userConfigManager,Instance instance,
         TextWorkerConfigManager textWorkerConfigManager, ILogger<AphroditeController> logger)
     {
+        _userConfigManager = userConfigManager;
+        _instance = instance;
         _textWorkerConfigManager = textWorkerConfigManager;
         _logger = logger;
     }
@@ -89,6 +93,9 @@ public class AphroditeController
         string ModelName = textWorkerConfig.model_name;
         string HuggingFaceToken = textWorkerConfig.hugging_face_token;
         string gpu_utilization = textWorkerConfig.gpu_utilization.ToString(CultureInfo.InvariantCulture).Replace(",", ".");
+        
+        string devicesString = _instance.Config.Devices.Trim();
+        string instanceName = _instance.GetUniqueInstanceName(await _userConfigManager.LoadConfig());
 
         Process? process = Process.Start(new ProcessStartInfo
         {
@@ -102,6 +109,10 @@ public class AphroditeController
             RedirectStandardError = true,
             //UseShellExecute = false,
             WorkingDirectory = WorkingDirectory,
+            Environment =
+            {
+                {"CUDA_VISIBLE_DEVICES",  devicesString}
+            }
         });
 
         if (process == null)
