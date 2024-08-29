@@ -77,7 +77,7 @@ public partial class MainWindow : Window
             if(_requiresRestart)
             {
                 AppendLine("Installation requires restart. Please restart your computer and run the installer again.");
-                MessageBox.Show("Installation requires restart. Please restart your computer and run the installer again.");
+                MessageBox.Show("Installation requires restart. Please restart your computer and run the installer again.", "Omniworker");
                 return;
             }
             
@@ -88,22 +88,26 @@ public partial class MainWindow : Window
 
             string text = "Installation completed successfully! Open http://localhost:7870 in your browser to access Omniworker.";
             AppendLine(text);
-            MessageBox.Show(text);
+            MessageBox.Show(text, "Omniworker");
         }
         catch (Exception e)
         {
             AppendLine(e.StackTrace);
             AppendLine("");
-            AppendLine("Installation failed:");
-            
+
+            string error = "Installation failed:\n";
+
             if(e.GetType() != typeof(Exception))
             {
-                AppendLine(e.GetType().Name + ": " + e.Message);
+                error+=(e.GetType().Name + ": " + e.Message);
             }
             else
             {
-                AppendLine(e.Message);
+                error+=(e.Message);
             }
+            
+            AppendLine(error);
+            MessageBox.Show(error, "Omniworker Installation Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
@@ -120,19 +124,19 @@ public partial class MainWindow : Window
 
     private async Task InstallCuda()
     {
-        var output = await RunProcessAndGetOutputSafe("nvidia-smi", "");
+        var output = await RunProcessAndGetOutputSafe("nvcc", "--version");
         if(output.Any(x => x != null && (
-               x.Contains("CUDA Version: 12.6", StringComparison.InvariantCultureIgnoreCase)
-               || x.Contains("CUDA Version: 12.5", StringComparison.InvariantCultureIgnoreCase)
-               || x.Contains("CUDA Version: 12.4", StringComparison.InvariantCultureIgnoreCase)
-               || x.Contains("CUDA Version: 12.3", StringComparison.InvariantCultureIgnoreCase)
+               x.Contains("release 12.6", StringComparison.InvariantCultureIgnoreCase)
+               || x.Contains("release 12.5", StringComparison.InvariantCultureIgnoreCase)
+               || x.Contains("release 12.4", StringComparison.InvariantCultureIgnoreCase)
+               || x.Contains("release 12.3", StringComparison.InvariantCultureIgnoreCase)
                )))
         {
             AppendLine("CUDA already installed");
             return;
         }
         
-        await InstallPackage("cuda --version 12.6.0.560");
+        await InstallPackage("cuda --version 12.6.0.560", true);
         _requiresRestart = true;
     }
 
@@ -215,6 +219,8 @@ public partial class MainWindow : Window
             throw new Exception("Docker installation failed or computer needs restart. Try to restart your computer and run the installer again.");
         }
 
+        await RunProcessAndGetOutputSafe(@"C:\Program Files\Docker\Docker\DockerCli.exe", "-SwitchLinuxEngine");
+
         int code = await RunProcessAndGetExitCode("docker", "ps");
 
         if (code != 0)
@@ -224,7 +230,7 @@ public partial class MainWindow : Window
             await RunProcessAndGetOutputSafe(@"C:\Program Files\Docker\Docker\Docker Desktop.exe", "");
             
             AppendLine("Waiting for Docker engine to start...");
-            await Task.Delay(10000);
+            await Task.Delay(TimeSpan.FromSeconds(20));
             
             code = await RunProcessAndGetExitCode("docker", "ps");
             
