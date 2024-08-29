@@ -21,6 +21,7 @@ public class OmniControllerMain
     private readonly ImageWorkerConfigManager _imageWorkerConfigManager;
     private readonly BridgeConfigManager _bridgeConfigManager;
     private readonly StatsCollector _statsCollector;
+    private readonly CudaTester _cudaTester;
     private CancellationToken? _appClosingToken;
     
     private readonly static SemaphoreSlim _workerStartingSemaphore = new(1, 1);
@@ -28,7 +29,7 @@ public class OmniControllerMain
     public OmniControllerMain(Instance instance, GridWorkerController gridWorkerController, AphroditeController aphroditeController,
         ImageWorkerController imageWorkerController, ILogger<OmniControllerMain> logger, UserConfigManager userConfigManager,
         TextWorkerConfigManager textWorkerConfigManager, ImageWorkerConfigManager imageWorkerConfigManager,
-        BridgeConfigManager bridgeConfigManager, StatsCollector statsCollector)
+        BridgeConfigManager bridgeConfigManager, StatsCollector statsCollector, CudaTester cudaTester)
     {
         _instance = instance;
         _gridWorkerController = gridWorkerController;
@@ -40,6 +41,7 @@ public class OmniControllerMain
         _imageWorkerConfigManager = imageWorkerConfigManager;
         _bridgeConfigManager = bridgeConfigManager;
         _statsCollector = statsCollector;
+        _cudaTester = cudaTester;
         _gridWorkerController = gridWorkerController;
         _aphroditeController = aphroditeController;
 
@@ -176,6 +178,15 @@ public class OmniControllerMain
         _startCancellation = new CancellationTokenSource();
         
         CancellationToken token = _startCancellation.Token;
+
+        if (_instance.Config.DeviceType == DeviceType.GPU)
+        {
+            AddOutput("Testing CUDA availability...");
+            if (!await TestCuda())
+            {
+                return;
+            }
+        }
         
         AddOutput("Ensuring unique worker name...");
         await EnsureUniqueWorkerName();
@@ -187,6 +198,33 @@ public class OmniControllerMain
         {
             Task.Run(async () => await WatchdogMethod(workerType, token));
         }
+    }
+
+    private async Task<bool> TestCuda()
+    {
+        bool isCudaAvailable = await _cudaTester.IsCudaAvailable();
+        
+        if (!isCudaAvailable)
+        {
+            await StopWorkers();
+            
+            AddOutput("");
+            AddOutput("--------------------");
+            AddOutput("Cannot run worker on GPU: CUDA is not available.");
+            AddOutput("Possible reasons:");
+            AddOutput("1. No NVIDIA GPU is present in the system.");
+            AddOutput("2. NVIDIA driver is not installed.");
+            AddOutput("3. CUDA is not installed.");
+            AddOutput("");
+            AddOutput("To install CUDA, use the following links:");
+            AddOutput("For Windows host: https://developer.nvidia.com/cuda-12-6-0-download-archive?target_os=Windows&target_arch=x86_64");
+            AddOutput("For Linux host: https://github.com/dex3r/AIPG-Omniworker/blob/main/Linux-Nvidia-Toolkit-Instructions.md");
+            
+            return false;
+        }
+        
+        AddOutput("CUDA is available!");
+        return true;
     }
 
     private async Task EnsureUniqueWorkerName()

@@ -14,6 +14,7 @@ builder.Services.AddSingleton<PersistentStorage>();
 builder.Services.AddSingleton<UserConfigManager>();
 builder.Services.AddSingleton<InstancesConfigManager>();
 builder.Services.AddSingleton<StatsCollector>();
+builder.Services.AddSingleton<CudaTester>();
 
 builder.Services.AddScoped<Instance>();
 builder.Services.AddScoped<OmniControllerMain>();
