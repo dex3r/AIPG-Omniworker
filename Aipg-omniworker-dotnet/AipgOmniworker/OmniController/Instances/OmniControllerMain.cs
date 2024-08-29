@@ -136,8 +136,13 @@ public class OmniControllerMain
         try
         {
             await _workerStartingSemaphore.WaitAsync();
-            
+
             await StartGridWorkerAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            AddOutput("Workers start operation was cancelled");
+            await StopWorkers();
         }
         catch (Exception e)
         {
@@ -212,9 +217,10 @@ public class OmniControllerMain
             AddOutput("--------------------");
             AddOutput("Cannot run worker on GPU: CUDA is not available.");
             AddOutput("Possible reasons:");
-            AddOutput("1. No NVIDIA GPU is present in the system.");
-            AddOutput("2. NVIDIA driver is not installed.");
-            AddOutput("3. CUDA is not installed.");
+            AddOutput("1. You have just installed CUDA but have not restarted the system.");
+            AddOutput("2. No NVIDIA GPU is present in the system.");
+            AddOutput("3. NVIDIA driver is not installed.");
+            AddOutput("4. CUDA is not installed.");
             AddOutput("");
             AddOutput("To install CUDA, use the following links:");
             AddOutput("For Windows host: https://developer.nvidia.com/cuda-12-6-0-download-archive?target_os=Windows&target_arch=x86_64");

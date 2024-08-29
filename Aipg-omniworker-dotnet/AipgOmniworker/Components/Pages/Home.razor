@@ -9,22 +9,22 @@
 <h3>Global Config</h3>
 
 <label for="GridApiKey">Grid Api Key:</label><br/>
-<input type="text" id="GridApiKey" @bind="@GridApiKey" /><br/>
+<input type="text" id="GridApiKey" @bind="@GridApiKey"/><br/>
 If you don't have Grid API Key get one from <a target="_blank" href="https://api.aipowergrid.io/register">https://api.aipowergrid.io/register</a><br/>
 <br/>
 <label for="ScribeName">Worker name (has to be unique, is publicly visible):</label><br/>
-<input type="text" id="ScribeName" @bind="@WorkerName" /><br/>
+<input type="text" id="ScribeName" @bind="@WorkerName"/><br/>
 <br/>
 <label for="HuggingFaceToken">Hugging Face Token:</label><br/>
-<input type="text" id="HuggingFaceToken" @bind="@HuggingFaceToken" /><br/>
+<input type="text" id="HuggingFaceToken" @bind="@HuggingFaceToken"/><br/>
 Required for some models, like Llamas. Create HuggingFace account and get one from <a href="https://huggingface.co/settings/tokens">here</a><br/>
 <br/>
-<label for="AutoUpdateImageWorkers">Initialize and update image workers:</label><br/>
-<input type="checkbox" id="AutoUpdateImageWorkers" @bind="@AutoUpdateImageWorkers" /><br/>
+@* <label for="AutoUpdateImageWorkers">Initialize and update image workers:</label><br/> *@
+@* <input type="checkbox" id="AutoUpdateImageWorkers" @bind="@AutoUpdateImageWorkers"/><br/> *@
 
 @* Named section with a title "Worker Config" *@
 
-<hr />
+<hr/>
 <h3>Worker Config</h3>
 
 <label for="SelectedInstance">Worker:</label><br/>
@@ -58,31 +58,34 @@ Required for some models, like Llamas. Create HuggingFace account and get one fr
 <br/>
 
 <label for="DevicesIds">Devices to use (comma separated IDs)</label>
-<input type="text" id="DevicesIds" @bind="@DevicesIds" /><br/>
+<input type="text" id="DevicesIds" @bind="@DevicesIds"/><br/>
 <br/>
 
-@if(WorkerType == WorkerType.Auto || WorkerType == WorkerType.Text)
+@if (WorkerType == WorkerType.Auto || WorkerType == WorkerType.Text)
 {
-    <label for="ModelName">Text model Name:</label><br/>
-    <input type="text" id="ModelName" @bind="@TextModelName" /><br/>
+    <label for="ModelName">Text model Name:</label>
+    <br/>
+    <input type="text" id="ModelName" @bind="@TextModelName"/>
+    <br/>
     <br/>
 }
 
-@if(WorkerType == WorkerType.Auto || WorkerType == WorkerType.Image)
+@if (WorkerType == WorkerType.Auto || WorkerType == WorkerType.Image)
 {
-    <label>Image models:</label><br />
+    <label>Image models:</label>
+    <br/>
     <ul>
         @foreach (var (model, index) in AdditionalImageModelNames.Select((model, index) => (model, index)))
         {
             <li>
-                <input type="text" @bind="AdditionalImageModelNames[index]" />
+                <input type="text" @bind="AdditionalImageModelNames[index]"/>
                 <button type="button" @onclick="() => RemoveImageModel(index)">Remove</button>
             </li>
         }
     </ul>
-    
+
     <!-- Input for adding a new image model -->
-    <input type="text" placeholder="Add new Image model" @bind="NewImageModel" />
+    <input type="text" placeholder="Add new Image model" @bind="NewImageModel"/>
     <button type="button" @onclick="AddNewImageModel">Add Image Model</button>
     <br/>
     <br/>
@@ -93,7 +96,7 @@ Required for some models, like Llamas. Create HuggingFace account and get one fr
 @* Not sure where to get one? Click <a href="https://aipowergrid.io/wallet">here</a><br/> *@
 
 @* Display status *@
-@switch(OmniControllerMain?.Status ?? WorkerStatus.Stopped)
+@switch (OmniControllerMain?.Status ?? WorkerStatus.Stopped)
 {
     case WorkerStatus.Running:
         <div class="alert alert-success" role="alert">
@@ -119,14 +122,19 @@ Required for some models, like Llamas. Create HuggingFace account and get one fr
 <!-- Disable worker output logs as scrollable readonly text box -->
 <textarea class="form-control" rows="20" readonly>@OmniControllerMain?.Output.ToOutputString()</textarea>
 
-<br/>
-Text worker process output:
-<textarea class="form-control" rows="20" readonly>@_selectedInstance?.GridWorkerController.GridTextWorkerOutput.ToOutputString()</textarea>
+@if (_selectedInstance?.Config is {WorkerType: WorkerType.Text or WorkerType.Auto})
+{
+    <br/>
+    <text>Text worker process output:</text>
+    <textarea class="form-control" rows="20" readonly>@_selectedInstance?.GridWorkerController.GridTextWorkerOutput.ToOutputString()</textarea>
 
-<br/>
-Aphrodite process output:
-<textarea class="form-control" rows="20" readonly>@_selectedInstance?.AphroditeController.AphroditeOutput.ToOutputString()</textarea>
-
-<br/>
-Image worker process output:
-<textarea class="form-control" rows="20" readonly>@_selectedInstance?.ImageWorkerController.Output.ToOutputString()</textarea>
+    <br/>
+    <text>Aphrodite process output:</text>
+    <textarea class="form-control" rows="20" readonly>@_selectedInstance?.AphroditeController.AphroditeOutput.ToOutputString()</textarea>
+}
+@if (_selectedInstance?.Config is {WorkerType: WorkerType.Image or WorkerType.Auto})
+{
+    <br/>
+    <text>Image worker process output:</text>
+    <textarea class="form-control" rows="20" readonly>@_selectedInstance?.ImageWorkerController.Output.ToOutputString()</textarea>
+}
