@@ -4,6 +4,20 @@ This is a repository for AIPG Omniworker. It's a tool for easy setup and managem
 
 ## Windows
 
+### [BETA] Via Installer
+
+This is the fastest and simplest way to start running the Omniworker. However, it may not work on every system.
+
+1. Go to [Releases](../../releases) and download the latest AIPG-Omniworker-Windows-Installer.exe
+1. Run the installer. You might need to restart your computer and rerun the installer when prompted.
+1. http://localhost:7870/ should open automatically. Follow the instructions there.
+
+Running the installer again will try to update Omniworker to the newest version and start it up again.
+
+### Via Docker
+
+If the Installer method fails for you, this is a safer router, but it requires manually installing a few things.
+
 1. Install [Docker](https://www.docker.com/products/docker-desktop/) if not installed already.
 1. Install [CUDA Toolkit](https://developer.nvidia.com/cuda-12-6-0-download-archive?target_os=Windows&target_arch=x86_64) if not installed already.
 1. Run this command: `(docker rm -f aipg-omniworker || ver > nul) && docker pull dex3r/aipg-omniworker && docker run -d -p 7870:8080 --gpus "all" --shm-size 8g --mount source=aipg-omniworker-volume,target=/persistent --restart=unless-stopped --name aipg-omniworker dex3r/aipg-omniworker`
