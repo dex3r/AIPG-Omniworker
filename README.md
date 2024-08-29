@@ -81,7 +81,7 @@ Configuration files can be found in a docker volume.
 - [x] Automatic worker selection based on grid image/worker balance
 - [ ] Automatic worker selection based on grid image/worker needs (how long is the image/text jobs queue)
 - [x] Multiple GPU support
-- [ ] CUDA not installed detection and instructions
+- [x] CUDA not installed detection and instructions
 - [x] Text worker/Aphrodide/Image worker/API error detection
 - [x] Windows EXE installer with automatic Docker and CUDA installation
 - [x] Worker stats
