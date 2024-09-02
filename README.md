@@ -79,13 +79,15 @@ Configuration files can be found in a docker volume.
 - [x] Image worker support
 - [x] Text worker support
 - [x] Automatic worker selection based on grid image/worker balance
+- [ ] Automatic worker selection based on centralized decision (call to the Horde API)
 - [ ] Automatic worker selection based on grid image/worker needs (how long is the image/text jobs queue)
 - [x] Multiple GPU support
 - [x] CUDA not installed detection and instructions
 - [x] Text worker/Aphrodide/Image worker/API error detection
 - [x] Windows EXE installer with automatic Docker and CUDA installation
 - [x] Worker stats
-- [ ] worker stats graphs
+- [ ] Worker stats graphs
+- [ ] Recommended models option, where the Horde API decides what image/text models to run
 
 # Development
 
