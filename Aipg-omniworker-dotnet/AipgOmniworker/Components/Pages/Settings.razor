@@ -1,0 +1,45 @@
+﻿@page "/Settings"
+@using AipgOmniworker.OmniController
+@rendermode InteractiveServer
+@inject BasicConfigManager BasicConfigManager
+
+<h3>Settings</h3>
+
+<label for="CustomHordeUrl">Custom Horde URL:</label><br/>
+<input type="text" id="CustomHordeUrl" @bind="@CustomHordeUrl"/><br/>
+
+<button class="btn btn-primary" @onclick="Save">Save</button>
+
+<br/>
+Container restart may be required after changing settings.
+
+<br/>
+@Output
+
+@code {
+    public string? CustomHordeUrl { get; set; }
+    public string? Output { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    public async Task Load()
+    {
+        BasicConfig basicConfig = await BasicConfigManager.LoadConfig();
+
+        CustomHordeUrl = basicConfig.GetHordeUrl();
+    }
+    
+    public async Task Save()
+    {
+        BasicConfig basicConfig = await BasicConfigManager.LoadConfig();
+        
+        basicConfig.CustomHordeUrl = CustomHordeUrl;
+        
+        await BasicConfigManager.SaveConfig(basicConfig);
+        
+        Output = "Settings saved.";
+    }
+}

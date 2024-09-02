@@ -3,7 +3,8 @@ using System.Text.RegularExpressions;
 
 namespace AipgOmniworker.OmniController;
 
-public class GridWorkerController(Instance instance, ILogger<GridWorkerController> logger, UserConfigManager userConfigManager)
+public class GridWorkerController(Instance instance, ILogger<GridWorkerController> logger, UserConfigManager userConfigManager,
+    BasicConfigManager basicConfigManager, BridgeConfigManager bridgeConfigManager)
 {
     public List<string> GridTextWorkerOutput { get; private set; } = new();
 
@@ -46,7 +47,12 @@ public class GridWorkerController(Instance instance, ILogger<GridWorkerControlle
         string devicesString = instance.Config.Devices.Trim();
         string instanceName = instance.GetUniqueInstanceName(await userConfigManager.LoadConfig());
 
-        await Task.Delay(200);
+        BasicConfig basicConfig = await basicConfigManager.LoadConfig();
+        BridgeConfig bridgeConfig = await bridgeConfigManager.LoadConfig();
+
+        bridgeConfig.horde_url = basicConfig.GetHordeUrl();
+
+        await bridgeConfigManager.SaveConfig(bridgeConfig);
         
         Process? process = Process.Start(new ProcessStartInfo
         {

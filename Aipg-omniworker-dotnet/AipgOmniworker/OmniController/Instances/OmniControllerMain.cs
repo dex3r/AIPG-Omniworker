@@ -22,6 +22,7 @@ public class OmniControllerMain
     private readonly BridgeConfigManager _bridgeConfigManager;
     private readonly StatsCollector _statsCollector;
     private readonly CudaTester _cudaTester;
+    private readonly BasicConfigManager _basicConfigManager;
     private CancellationToken? _appClosingToken;
     
     private readonly static SemaphoreSlim _workerStartingSemaphore = new(1, 1);
@@ -29,7 +30,7 @@ public class OmniControllerMain
     public OmniControllerMain(Instance instance, GridWorkerController gridWorkerController, AphroditeController aphroditeController,
         ImageWorkerController imageWorkerController, ILogger<OmniControllerMain> logger, UserConfigManager userConfigManager,
         TextWorkerConfigManager textWorkerConfigManager, ImageWorkerConfigManager imageWorkerConfigManager,
-        BridgeConfigManager bridgeConfigManager, StatsCollector statsCollector, CudaTester cudaTester)
+        BridgeConfigManager bridgeConfigManager, StatsCollector statsCollector, CudaTester cudaTester, BasicConfigManager basicConfigManager)
     {
         _instance = instance;
         _gridWorkerController = gridWorkerController;
@@ -42,6 +43,7 @@ public class OmniControllerMain
         _bridgeConfigManager = bridgeConfigManager;
         _statsCollector = statsCollector;
         _cudaTester = cudaTester;
+        _basicConfigManager = basicConfigManager;
         _gridWorkerController = gridWorkerController;
         _aphroditeController = aphroditeController;
 
@@ -481,9 +483,12 @@ public class OmniControllerMain
     private async Task<WorkerInfo[]> GetWorkersInfo()
     {
         // Get array of WorkerInfo from https://api.aipowergrid.io/api/v2/workers
+
+        BasicConfig basicConfig = await _basicConfigManager.LoadConfig();
+        string url = basicConfig.GetApiV2Url("workers");
         
         using var client = new HttpClient();
-        HttpResponseMessage response = await client.GetAsync("https://api.aipowergrid.io/api/v2/workers");
+        HttpResponseMessage response = await client.GetAsync(url);
 
         if (!response.IsSuccessStatusCode)
         {

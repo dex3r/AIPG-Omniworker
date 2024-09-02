@@ -6,7 +6,8 @@ public class StatsCollector(
     InstancesConfigManager instancesConfigManager,
     InstancesManager instancesManager,
     UserConfigManager userConfigManager,
-    ILogger<StatsCollector> logger)
+    ILogger<StatsCollector> logger,
+    BasicConfigManager basicConfigManager)
 {
     private ApiWorkerDetails[]? _cachedWorkersDetails;
     private DateTime? _lastFetchTime;
@@ -92,7 +93,9 @@ public class StatsCollector(
     {
         try
         {
-            string url = "https://api.aipowergrid.io/api/v2/workers";
+            BasicConfig basicConfig = await basicConfigManager.LoadConfig();
+
+            string url = basicConfig.GetApiV2Url("workers");
 
             HttpClient client = new HttpClient();
             client.DefaultRequestHeaders.Add("Authorization", "Bearer " + Environment.GetEnvironmentVariable("AIPG_API_KEY"));

@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace AipgOmniworker.OmniController;
 
 public class ImageWorkerController(Instance instance, UserConfigManager userConfigManager,
-    ILogger<ImageWorkerController> logger)
+    ILogger<ImageWorkerController> logger, BasicConfigManager basicConfigManager)
 {
     public List<string> Output { get; private set; } = new();
 
@@ -72,6 +72,8 @@ public class ImageWorkerController(Instance instance, UserConfigManager userConf
         string devicesString = instance.Config.Devices.Trim();
         string instanceName = instance.GetUniqueInstanceName(await userConfigManager.LoadConfig());
         
+        BasicConfig basicConfig = await basicConfigManager.LoadConfig();
+        
         Process? process = Process.Start(new ProcessStartInfo
         {
             FileName = fullPath,
@@ -81,7 +83,7 @@ public class ImageWorkerController(Instance instance, UserConfigManager userConf
             WorkingDirectory = WorkingDirectory,
             Environment =
             {
-                {"AI_HORDE_URL", "https://api.aipowergrid.io/api/"},
+                {"AI_HORDE_URL", basicConfig.GetApiUrl()},
                 {"CUDA_VISIBLE_DEVICES",  devicesString}
             }
         });

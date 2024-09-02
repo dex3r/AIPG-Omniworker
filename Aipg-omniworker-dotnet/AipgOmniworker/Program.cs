@@ -15,6 +15,7 @@ builder.Services.AddSingleton<UserConfigManager>();
 builder.Services.AddSingleton<InstancesConfigManager>();
 builder.Services.AddSingleton<StatsCollector>();
 builder.Services.AddSingleton<CudaTester>();
+builder.Services.AddSingleton<BasicConfigManager>();
 
 builder.Services.AddScoped<Instance>();
 builder.Services.AddScoped<OmniControllerMain>();
