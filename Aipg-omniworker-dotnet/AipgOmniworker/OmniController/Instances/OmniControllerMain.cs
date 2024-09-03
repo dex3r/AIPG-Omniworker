@@ -24,13 +24,15 @@ public class OmniControllerMain
     private readonly CudaTester _cudaTester;
     private readonly BasicConfigManager _basicConfigManager;
     private CancellationToken? _appClosingToken;
-    
+
     private readonly static SemaphoreSlim _workerStartingSemaphore = new(1, 1);
+    private readonly static SemaphoreSlim _applyUserConfigsToWorkersLock = new(1, 1);
 
     public OmniControllerMain(Instance instance, GridWorkerController gridWorkerController, AphroditeController aphroditeController,
         ImageWorkerController imageWorkerController, ILogger<OmniControllerMain> logger, UserConfigManager userConfigManager,
         TextWorkerConfigManager textWorkerConfigManager, ImageWorkerConfigManager imageWorkerConfigManager,
-        BridgeConfigManager bridgeConfigManager, StatsCollector statsCollector, CudaTester cudaTester, BasicConfigManager basicConfigManager)
+        BridgeConfigManager bridgeConfigManager, StatsCollector statsCollector, CudaTester cudaTester,
+        BasicConfigManager basicConfigManager)
     {
         _instance = instance;
         _gridWorkerController = gridWorkerController;
@@ -61,27 +63,18 @@ public class OmniControllerMain
             stopWorkersTask.Wait(TimeSpan.FromSeconds(5));
         });
 
-        try
+        if (_instance.Config.AutoStartWorker)
         {
-            await _workerStartingSemaphore.WaitAsync(appClosing);
-            
-            if (_instance.Config.AutoStartWorker)
-            {
-                _logger.LogInformation("Auto starting worker...");
-                await ApplyUserConfigsToWorkers();
-                await StartGridWorkerAsync();
-            }
-            else
-            {
-                _logger.LogInformation("Auto start worker is disabled");
-            }
+            _logger.LogInformation("Auto starting worker...");
+            await ApplyUserConfigsToWorkers();
+            await SaveAndRestart(); // Call SaveAndRestart rather than StartGridWorkerAsync to ensure catching exceptions
         }
-        finally
+        else
         {
-            _workerStartingSemaphore.Release();
+            _logger.LogInformation("Auto start worker is disabled");
         }
     }
-    
+
     private void OnImageWorkerOutputChanged(object? sender, string e)
     {
         StateChangedEvent?.Invoke(this, EventArgs.Empty);
@@ -99,46 +92,53 @@ public class OmniControllerMain
 
     public async Task ApplyUserConfigsToWorkers()
     {
-        UserConfig userConfig = await _userConfigManager.LoadConfig();
+        try
+        {
+            await _applyUserConfigsToWorkersLock.WaitAsync();
 
-        if (string.IsNullOrWhiteSpace(userConfig.ApiKey))
-        {
-            throw new Exception("API Key not provided");
+            UserConfig userConfig = await _userConfigManager.LoadConfig();
+
+            if (string.IsNullOrWhiteSpace(userConfig.ApiKey))
+            {
+                throw new Exception("API Key not provided");
+            }
+
+            if (string.IsNullOrWhiteSpace(userConfig.WorkerName))
+            {
+                throw new Exception("Worker name not provided");
+            }
+
+            BridgeConfig bridgeConfig = await _bridgeConfigManager.LoadConfig();
+            bridgeConfig.api_key = userConfig.ApiKey;
+            bridgeConfig.worker_name = userConfig.WorkerName;
+            bridgeConfig.scribe_name = userConfig.WorkerName;
+            await _bridgeConfigManager.SaveConfig(bridgeConfig);
+
+            TextWorkerConfig textWorkerConfig = await _textWorkerConfigManager.LoadConfig();
+            textWorkerConfig.model_name = _instance.Config.TextWorkerModelName;
+            textWorkerConfig.hugging_face_token = userConfig.HuggingFaceToken;
+            textWorkerConfig.gpus = _instance.Config.Devices.Trim();
+            await _textWorkerConfigManager.SaveConfig(textWorkerConfig);
+
+            ImageWorkerConfig imageWorkerConfig = await _imageWorkerConfigManager.LoadConfig();
+            imageWorkerConfig.api_key = userConfig.ApiKey;
+            imageWorkerConfig.scribe_name = userConfig.WorkerName;
+            imageWorkerConfig.alchemist_name = userConfig.WorkerName;
+            imageWorkerConfig.disable_terminal_ui = true;
+            imageWorkerConfig.dreamer_name = userConfig.WorkerName;
+            imageWorkerConfig.models_to_load = _instance.Config.ImageWorkerModelsNames ?? new string[0];
+            await _imageWorkerConfigManager.SaveConfig(imageWorkerConfig);
         }
-        
-        if (string.IsNullOrWhiteSpace(userConfig.WorkerName))
+        finally
         {
-            throw new Exception("Worker name not provided");
+            _applyUserConfigsToWorkersLock.Release();
         }
-        
-        BridgeConfig bridgeConfig = await _bridgeConfigManager.LoadConfig();
-        bridgeConfig.api_key = userConfig.ApiKey;
-        bridgeConfig.worker_name = userConfig.WorkerName;
-        bridgeConfig.scribe_name = userConfig.WorkerName;
-        await _bridgeConfigManager.SaveConfig(bridgeConfig);
-        
-        TextWorkerConfig textWorkerConfig = await _textWorkerConfigManager.LoadConfig();
-        textWorkerConfig.model_name = _instance.Config.TextWorkerModelName;
-        textWorkerConfig.hugging_face_token = userConfig.HuggingFaceToken;
-        textWorkerConfig.gpus = _instance.Config.Devices.Trim();
-        await _textWorkerConfigManager.SaveConfig(textWorkerConfig);
-        
-        ImageWorkerConfig imageWorkerConfig = await _imageWorkerConfigManager.LoadConfig();
-        imageWorkerConfig.api_key = userConfig.ApiKey;
-        imageWorkerConfig.scribe_name = userConfig.WorkerName;
-        imageWorkerConfig.alchemist_name = userConfig.WorkerName;
-        imageWorkerConfig.disable_terminal_ui = true;
-        imageWorkerConfig.dreamer_name = userConfig.WorkerName;
-        imageWorkerConfig.models_to_load = _instance.Config.ImageWorkerModelsNames ?? new string[0];
-        await _imageWorkerConfigManager.SaveConfig(imageWorkerConfig);
     }
-    
+
     public async Task SaveAndRestart()
     {
         try
         {
-            await _workerStartingSemaphore.WaitAsync();
-
             await StartGridWorkerAsync();
         }
         catch (OperationCanceledException)
@@ -157,15 +157,11 @@ public class OmniControllerMain
                 Status = WorkerStatus.Stopped;
             }
         }
-        finally
-        {
-            _workerStartingSemaphore.Release();
-        }
     }
 
     private async Task StartGridWorkerAsync()
     {
-        if(Status != WorkerStatus.Stopping && Status != WorkerStatus.Stopped)
+        if (Status != WorkerStatus.Stopping && Status != WorkerStatus.Stopped)
         {
             await StopWorkers();
         }
@@ -177,44 +173,65 @@ public class OmniControllerMain
         AddOutput($"---- {DateTime.Now.ToString()} ----");
         AddOutput("Starting worker...");
         Status = WorkerStatus.Starting;
-
-        if(_startCancellation != null)
+        
+        if (_startCancellation != null)
         {
             await _startCancellation.CancelAsync();
         }
         _startCancellation = new CancellationTokenSource();
-        
         CancellationToken token = _startCancellation.Token;
 
-        if (_instance.Config.DeviceType == DeviceType.GPU)
+        try
         {
-            AddOutput("Testing CUDA availability...");
-            if (!await TestCuda())
+            if (_workerStartingSemaphore.CurrentCount == 0)
             {
-                return;
+                AddOutput("Another worker is already starting. Waiting for it to finish starting before starting this worker.");
+            }
+
+            await _workerStartingSemaphore.WaitAsync(token);
+            
+            token.ThrowIfCancellationRequested();
+
+            if (_instance.Config.DeviceType == DeviceType.GPU)
+            {
+                AddOutput("Testing CUDA availability...");
+                if (!await TestCuda())
+                {
+                    return;
+                }
+            }
+
+            token.ThrowIfCancellationRequested();
+
+            AddOutput("Ensuring unique worker name...");
+            await EnsureUniqueWorkerName(token);
+
+            AddOutput("Connecting to the API...");
+            // Get recommended worker type even if Auto is not selected to ensure API is reachable and working
+            WorkerType recommendedWorkerType = await FetchAutoPreferredWorkerType(token);
+
+            AddOutput($"Starting worker based on type from config: {_instance.Config.WorkerType}");
+            WorkerType workerType = await StartWorkerBasedOnType(_instance.Config.WorkerType, token, recommendedWorkerType);
+
+            if (Status == WorkerStatus.Running || Status == WorkerStatus.Starting)
+            {
+                Task.Run(async () => await WatchdogMethod(workerType, token));
             }
         }
-        
-        AddOutput("Ensuring unique worker name...");
-        await EnsureUniqueWorkerName();
-        
-        AddOutput($"Starting worker based on type from config: {_instance.Config.WorkerType}");
-        WorkerType workerType = await StartWorkerBasedOnType(_instance.Config.WorkerType, token);
-        
-        if(Status == WorkerStatus.Running || Status == WorkerStatus.Starting)
+        finally
         {
-            Task.Run(async () => await WatchdogMethod(workerType, token));
+            _workerStartingSemaphore.Release();
         }
     }
 
     private async Task<bool> TestCuda()
     {
         bool isCudaAvailable = await _cudaTester.IsCudaAvailable();
-        
+
         if (!isCudaAvailable)
         {
             await StopWorkers();
-            
+
             AddOutput("");
             AddOutput("--------------------");
             AddOutput("Cannot run worker on GPU: CUDA is not available.");
@@ -227,21 +244,22 @@ public class OmniControllerMain
             AddOutput("To install CUDA, use the following links:");
             AddOutput("For Windows host: https://developer.nvidia.com/cuda-12-6-0-download-archive?target_os=Windows&target_arch=x86_64");
             AddOutput("For Linux host: https://github.com/dex3r/AIPG-Omniworker/blob/main/Linux-Nvidia-Toolkit-Instructions.md");
-            
+
             return false;
         }
-        
+
         AddOutput("CUDA is available!");
         return true;
     }
 
-    private async Task EnsureUniqueWorkerName()
+    private async Task EnsureUniqueWorkerName(CancellationToken cancellationToken)
     {
         await _statsCollector.ClearCache();
-        bool alreadyExist = await IsVisibleFromApi();
+        bool alreadyExist = await IsVisibleFromApi(cancellationToken: cancellationToken);
 
         UserConfig userConfig = await _userConfigManager.LoadConfig();
-        
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (!alreadyExist)
         {
             AddOutput($"Worker name is unique: {_instance.GetUniqueInstanceName(userConfig)}");
@@ -252,9 +270,9 @@ public class OmniControllerMain
         _instance.TempWorkerNamePostfix = Guid.NewGuid().ToString().Substring(0, 8);
 
         AddOutput($"Default worker name '{oldName}' is already taken. Changing to: {_instance.GetUniqueInstanceName(userConfig)}");
-        
+
         await _statsCollector.ClearCache();
-        alreadyExist = await IsVisibleFromApi();
+        alreadyExist = await IsVisibleFromApi(cancellationToken: cancellationToken);
 
         if (alreadyExist)
         {
@@ -277,7 +295,7 @@ public class OmniControllerMain
         }
         finally
         {
-           AddOutput("Watchdog method stopped!!"); 
+            AddOutput("Watchdog method stopped!!");
         }
     }
 
@@ -285,7 +303,7 @@ public class OmniControllerMain
     {
         DateTime startTime = DateTime.Now;
         TimeSpan maxRunTime = TimeSpan.FromHours(1);
-        
+
         while (!stoppingToken.IsCancellationRequested)
         {
             await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
@@ -294,8 +312,8 @@ public class OmniControllerMain
             {
                 continue;
             }
-            
-            if(DateTime.Now - startTime > maxRunTime)
+
+            if (DateTime.Now - startTime > maxRunTime)
             {
                 AddOutput($"Worker has been running for {maxRunTime.ToString()}, restarting...");
                 SaveAndRestart();
@@ -304,8 +322,8 @@ public class OmniControllerMain
 
             if (workerType == WorkerType.Text)
             {
-                if(!await _gridWorkerController.IsRunning()
-                   || !await _aphroditeController.IsRunning())
+                if (!await _gridWorkerController.IsRunning()
+                    || !await _aphroditeController.IsRunning())
                 {
                     AddOutput("Grid Text Worker is not running, restarting...");
                     RestartSilentWithDelay(stoppingToken);
@@ -314,7 +332,7 @@ public class OmniControllerMain
             }
             else if (workerType == WorkerType.Image)
             {
-                if(!await _imageWorkerController.IsRunning())
+                if (!await _imageWorkerController.IsRunning())
                 {
                     AddOutput("Image Worker is not running, restarting...");
                     RestartSilentWithDelay(stoppingToken);
@@ -335,23 +353,23 @@ public class OmniControllerMain
         }
     }
 
-    private async Task<bool> IsVisibleFromApi(bool clearCacheIfNotVisible = false)
+    private async Task<bool> IsVisibleFromApi(bool clearCacheIfNotVisible = false, CancellationToken cancellationToken = default)
     {
-        WorkerStats[] workersStats = await _statsCollector.CollectStats();
+        WorkerStats[] workersStats = await _statsCollector.CollectStats(cancellationToken);
         WorkerStats? workerStats = workersStats.FirstOrDefault(w => w.Instance.InstanceId == _instance.InstanceId);
         bool visible = workerStats != null && workerStats.VisibleOnApi;
-        
+
         if (!visible)
         {
             if (!clearCacheIfNotVisible)
             {
                 return false;
             }
-            
+
             await _statsCollector.ClearCache();
         }
-        
-        workersStats = await _statsCollector.CollectStats();
+
+        workersStats = await _statsCollector.CollectStats(cancellationToken);
         workerStats = workersStats.FirstOrDefault(w => w.Instance.InstanceId == _instance.InstanceId);
         visible = workerStats != null && workerStats.VisibleOnApi;
 
@@ -361,9 +379,9 @@ public class OmniControllerMain
     private async Task RestartSilentWithDelay(CancellationToken stoppingToken)
     {
         await Task.Delay(TimeSpan.FromSeconds(10));
-        
-        if(stoppingToken.IsCancellationRequested 
-           || _appClosingToken?.IsCancellationRequested == true)
+
+        if (stoppingToken.IsCancellationRequested
+            || _appClosingToken?.IsCancellationRequested == true)
         {
             return;
         }
@@ -377,7 +395,7 @@ public class OmniControllerMain
         {
             AddOutput("Workers are starting, cancelling and force stopping");
         }
-        
+
         Status = WorkerStatus.Stopping;
         AddOutput("Stopping workers...");
 
@@ -420,15 +438,21 @@ public class OmniControllerMain
         Status = WorkerStatus.Stopped;
     }
 
-    private async Task<WorkerType> StartWorkerBasedOnType(WorkerType workerType, CancellationToken cancellationToken)
+    private async Task<WorkerType> StartWorkerBasedOnType(WorkerType workerType, CancellationToken cancellationToken,
+        WorkerType recommendedWorkerType)
     {
         AddOutput($"Starting worker of type: {workerType}");
-        
+
+        if (workerType == WorkerType.Auto)
+        {
+            workerType = recommendedWorkerType;
+            AddOutput($"Starting worker of type {workerType} based on recommended worker type.");
+        }
+
         switch (workerType)
         {
             case WorkerType.Auto:
-                return await StartWorkerAutoSelect(cancellationToken);
-                break;
+                throw new Exception("Auto worker type value cannot be Auto itself");
             case WorkerType.Text:
                 await StartTextWorker(cancellationToken);
                 return WorkerType.Text;
@@ -440,44 +464,56 @@ public class OmniControllerMain
         }
     }
 
-    private async Task<WorkerType> StartWorkerAutoSelect(CancellationToken cancellationToken)
+    private async Task<WorkerType> FetchAutoPreferredWorkerType(CancellationToken cancellationToken)
     {
-        WorkerType workerType = await FetchAutoPreferredWorkerType();
+        AddOutput("Fetching recommended auto worker type from API...");
 
-        if (workerType == WorkerType.Auto)
+        BasicConfig basicConfig = await _basicConfigManager.LoadConfig();
+        string url = basicConfig.GetApiV2Url("auto_worker_type");
+
+        UserConfig userConfig = await _userConfigManager.LoadConfig();
+
+        using var client = new HttpClient();
+        client.DefaultRequestHeaders.Add("apikey", userConfig.ApiKey);
+
+        HttpResponseMessage response = await client.GetAsync(url, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!response.IsSuccessStatusCode)
         {
-            throw new Exception("Auto worker type value cannot be Auto itself");
-        }
-        
-        return await StartWorkerBasedOnType(workerType, cancellationToken);
-    }
-    
-    private async Task<WorkerType> FetchAutoPreferredWorkerType()
-    {
-        AddOutput("Fetching workers info to determine Auto worker type...");
-        WorkerInfo[] workers = await GetWorkersInfo();
-        
-        int imageWorkerCount = workers.Count(w => w.type == "image");
-        int textWorkerCount = workers.Count(w => w.type == "text");
-        
-        AddOutput($"Image worker count: {imageWorkerCount} Text worker count: {textWorkerCount}");
-        
-        if (imageWorkerCount == textWorkerCount)
-        {
-            AddOutput("Both worker types have equal count, selecting Text worker type");
-            return WorkerType.Text;
+            try
+            {
+                string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+                AddOutput($"Failed to connect to the API, HTTP Code {response.StatusCode}, body: {responseString}");
+            }
+            catch
+            {
+                AddOutput($"Failed to connect to the API, HTTP Code {response.StatusCode}");
+            }
+
+            throw new Exception("Failed to connect to the API.");
         }
 
-        if (imageWorkerCount > textWorkerCount)
+        string json = await response.Content.ReadAsStringAsync(cancellationToken);
+        AutoWorkerTypeResponse? autoWorkerTypeResponse = JsonConvert.DeserializeObject<AutoWorkerTypeResponse>(json);
+
+        if (autoWorkerTypeResponse == null)
         {
-            AddOutput("There are currently more Image workers than Text workers, so starting Text worker");
-            return WorkerType.Text;
+            AddOutput($"Auto worker info received from the API: {json}");
+            _logger.LogInformation("Auto worker info: {Info}", json);
+
+            throw new Exception("Failed to parse auto worker info received from the API");
         }
-        else
+
+        string recommendedWorkerType = autoWorkerTypeResponse.recommended_worker_type;
+
+        // Do not use Enum.Parse in case the WorkerType is ever refactored
+        return recommendedWorkerType switch
         {
-            AddOutput("There are currently more Text workers than Image workers, so starting Image worker");
-            return WorkerType.Image;
-        }
+            "text" => WorkerType.Text,
+            "image" => WorkerType.Image,
+            _ => throw new Exception($"Unknown worker type received from the API: {recommendedWorkerType}")
+        };
     }
 
     private async Task<WorkerInfo[]> GetWorkersInfo()
@@ -486,7 +522,7 @@ public class OmniControllerMain
 
         BasicConfig basicConfig = await _basicConfigManager.LoadConfig();
         string url = basicConfig.GetApiV2Url("workers");
-        
+
         using var client = new HttpClient();
         HttpResponseMessage response = await client.GetAsync(url);
 
@@ -494,14 +530,14 @@ public class OmniControllerMain
         {
             throw new Exception("Failed to get workers info");
         }
-        
+
         string json = await response.Content.ReadAsStringAsync();
         WorkerInfo[] workers = JsonConvert.DeserializeObject<WorkerInfo[]>(json);
         if (workers == null)
         {
             throw new Exception("Failed to parse workers info");
         }
-        
+
         return workers;
     }
 
@@ -509,16 +545,16 @@ public class OmniControllerMain
     {
         AddOutput("Starting image worker...");
         Status = WorkerStatus.Starting;
-        
+
         await _imageWorkerController.StartImageWorker(cancellationToken);
-        
+
         AddOutput("Image worker process, downloading models... (it may take a few minutes)");
         AddOutput("Waiting for worker to appear on the API...");
-        
+
         await WaitForWorkerToAppearOnApi(cancellationToken);
-        
+
         AddOutput("Image worker started!");
-        
+
         Status = WorkerStatus.Running;
     }
 
@@ -534,19 +570,19 @@ public class OmniControllerMain
             AddOutput("Aphrodite failed to start !!!");
             return;
         }
-        
+
         AddOutput("Aphrodite started!");
 
         AddOutput("Starting Grid Text Worker...");
         Status = WorkerStatus.Starting;
-        
+
         await _gridWorkerController.StartGridTextWorker(cancellationToken);
-        
+
         AddOutput("Text Worker process started.");
-        
+
         AddOutput("Waiting for worker to appear on the API...");
         await WaitForWorkerToAppearOnApi(cancellationToken);
-        
+
         cancellationToken.ThrowIfCancellationRequested();
         AddOutput("Text Worker started!");
         Status = WorkerStatus.Running;
@@ -556,23 +592,23 @@ public class OmniControllerMain
     {
         TimeSpan timeout = TimeSpan.FromHours(1);
         DateTime startTime = DateTime.Now;
-        
+
         do
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             bool visible = await IsVisibleFromApi();
-      
+
             if (visible)
             {
                 break;
             }
-            
-            if(DateTime.Now - startTime > timeout)
+
+            if (DateTime.Now - startTime > timeout)
             {
                 throw new Exception("Worker failed to start: failed to appear on the API in time.");
             }
-            
+
             await Task.Delay(TimeSpan.FromSeconds(5));
         } while (true);
     }
@@ -583,7 +619,7 @@ public class OmniControllerMain
         {
             Output.RemoveAt(0);
         }
-        
+
         _logger.LogInformation(output);
         Output.Add(output);
         StateChangedEvent?.Invoke(this, EventArgs.Empty);

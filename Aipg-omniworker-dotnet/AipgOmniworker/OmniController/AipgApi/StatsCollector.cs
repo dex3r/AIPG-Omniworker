@@ -15,28 +15,31 @@ public class StatsCollector(
     private readonly TimeSpan _cacheDuration = TimeSpan.FromSeconds(5);
     private readonly SemaphoreSlim _fetchLock = new(1);
 
-    public async Task<WorkerStats[]> CollectStats()
+    public async Task<WorkerStats[]> CollectStats(CancellationToken cancellationToken = default)
     {
         InstanceConfig[] configs = await instancesConfigManager.GetAllInstances();
+        cancellationToken.ThrowIfCancellationRequested();
 
         List<WorkerStats> stats = new List<WorkerStats>();
 
-        ApiWorkerDetails[]? apiWorkersDetails = await FetchWorkersDetails();
+        ApiWorkerDetails[]? apiWorkersDetails = await FetchWorkersDetails(cancellationToken);
 
         foreach (InstanceConfig config in configs)
         {
             Instance instance = await instancesManager.GetInstance(config.InstanceId);
-            WorkerStats stat = await CollectWorkerStats(instance, apiWorkersDetails);
+            WorkerStats stat = await CollectWorkerStats(instance, apiWorkersDetails, cancellationToken);
             stats.Add(stat);
         }
 
         return stats.ToArray();
     }
 
-    private async Task<WorkerStats> CollectWorkerStats(Instance instance, ApiWorkerDetails[]? apiWorkersDetails)
+    private async Task<WorkerStats> CollectWorkerStats(Instance instance, ApiWorkerDetails[]? apiWorkersDetails,
+        CancellationToken cancellationToken)
     {
         ApiWorkerDetails? workerDetails = null;
         UserConfig userConfig = await userConfigManager.LoadConfig();
+        cancellationToken.ThrowIfCancellationRequested();
 
         if (apiWorkersDetails != null)
         {
@@ -65,11 +68,11 @@ public class StatsCollector(
         };
     }
 
-    private async Task<ApiWorkerDetails[]?> FetchWorkersDetails()
+    private async Task<ApiWorkerDetails[]?> FetchWorkersDetails(CancellationToken cancellationToken)
     {
         try
         {
-            await _fetchLock.WaitAsync();
+            await _fetchLock.WaitAsync(cancellationToken);
 
             if (_cachedWorkersDetails != null
                 && _lastFetchTime.HasValue
@@ -78,7 +81,7 @@ public class StatsCollector(
                 return _cachedWorkersDetails;
             }
 
-            _cachedWorkersDetails = await ActualFetchWorkersDetails();
+            _cachedWorkersDetails = await ActualFetchWorkersDetails(cancellationToken);
             _lastFetchTime = DateTime.Now;
 
             return _cachedWorkersDetails;
@@ -89,18 +92,18 @@ public class StatsCollector(
         }
     }
 
-    private async Task<ApiWorkerDetails[]?> ActualFetchWorkersDetails()
+    private async Task<ApiWorkerDetails[]?> ActualFetchWorkersDetails(CancellationToken cancellationToken)
     {
         try
         {
             BasicConfig basicConfig = await basicConfigManager.LoadConfig();
+            cancellationToken.ThrowIfCancellationRequested();
 
             string url = basicConfig.GetApiV2Url("workers");
 
             HttpClient client = new HttpClient();
-            client.DefaultRequestHeaders.Add("Authorization", "Bearer " + Environment.GetEnvironmentVariable("AIPG_API_KEY"));
-            HttpResponseMessage response = await client.GetAsync(url);
-            string responseBody = await response.Content.ReadAsStringAsync();
+            HttpResponseMessage response = await client.GetAsync(url, cancellationToken);
+            string responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
             ApiWorkerDetails[] apiWorkersDetails = JsonConvert.DeserializeObject<ApiWorkerDetails[]>(responseBody);
 
             return apiWorkersDetails;
