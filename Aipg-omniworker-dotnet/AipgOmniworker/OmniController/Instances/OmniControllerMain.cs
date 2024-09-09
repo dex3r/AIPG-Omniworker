@@ -208,7 +208,8 @@ public class OmniControllerMain
 
             AddOutput("Connecting to the API...");
             // Get recommended worker type even if Auto is not selected to ensure API is reachable and working
-            WorkerType recommendedWorkerType = await FetchAutoPreferredWorkerType(token);
+            //WorkerType recommendedWorkerType = await FetchAutoPreferredWorkerType(token);
+            WorkerType recommendedWorkerType = WorkerType.Text; //TODO: Uncomment above once new API is deployed
 
             AddOutput($"Starting worker based on type from config: {_instance.Config.WorkerType}");
             WorkerType workerType = await StartWorkerBasedOnType(_instance.Config.WorkerType, token, recommendedWorkerType);

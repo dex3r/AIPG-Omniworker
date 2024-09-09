@@ -5,6 +5,7 @@
 @inject ILogger<Home> Logger
 @inject InstancesManager InstancesManager;
 @inject InstancesConfigManager InstancesConfigManager;
+@inject IJSRuntime JS
 
 <h3>Global Config</h3>
 
@@ -117,24 +118,45 @@ Required for some models, like Llamas. Create HuggingFace account and get one fr
 }
 
 <button class="btn btn-primary" @onclick="StartWorkers">Save and restart worker</button>
+<button class="btn btn-primary" @onclick="Save">Save</button>
 <button class="btn btn-primary" @onclick="StopWorkers">Stop worker</button>
 
-<!-- Disable worker output logs as scrollable readonly text box -->
-<textarea class="form-control" rows="20" readonly>@OmniControllerMain?.Output.ToOutputString()</textarea>
+<textarea class="form-control" rows="20" id=@MainTextAreaId readonly>@OmniControllerMain?.Output.ToOutputString()</textarea>
 
 @if (_selectedInstance?.Config is {WorkerType: WorkerType.Text or WorkerType.Auto})
 {
     <br/>
     <text>Text worker process output:</text>
-    <textarea class="form-control" rows="20" readonly>@_selectedInstance?.GridWorkerController.GridTextWorkerOutput.ToOutputString()</textarea>
+    <textarea class="form-control" rows="20" id=@TextWorkerTextAreaId readonly>@_selectedInstance?.GridWorkerController.GridTextWorkerOutput.ToOutputString()</textarea>
 
     <br/>
     <text>Aphrodite process output:</text>
-    <textarea class="form-control" rows="20" readonly>@_selectedInstance?.AphroditeController.AphroditeOutput.ToOutputString()</textarea>
+    <textarea class="form-control" rows="20" id=@AphroditeTextAreaId readonly>@_selectedInstance?.AphroditeController.AphroditeOutput.ToOutputString()</textarea>
 }
 @if (_selectedInstance?.Config is {WorkerType: WorkerType.Image or WorkerType.Auto})
 {
     <br/>
     <text>Image worker process output:</text>
-    <textarea class="form-control" rows="20" readonly>@_selectedInstance?.ImageWorkerController.Output.ToOutputString()</textarea>
+    <textarea class="form-control" rows="20" id=@ImageWorkerTextAreaId readonly>@_selectedInstance?.ImageWorkerController.Output.ToOutputString()</textarea>
 }
+
+<script>
+    window.scrollTextAreaIfNeeded = (textareaId) => {
+        var textarea = document.getElementById(textareaId);
+        if (!textarea) return false;
+
+        // Check if the user is at the bottom
+        var tolerance = 10;
+        var isAtBottom = (textarea.scrollHeight - textarea.scrollTop - textarea.clientHeight) <= tolerance;
+
+         return isAtBottom;
+    };
+
+    window.scrollToBottom = (textareaId) => {
+        var textarea = document.getElementById(textareaId);
+        if (textarea) {
+            textarea.scrollTop = textarea.scrollHeight;
+        }
+    };
+</script>
+

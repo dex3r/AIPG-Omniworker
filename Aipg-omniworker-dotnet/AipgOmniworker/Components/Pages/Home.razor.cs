@@ -1,5 +1,6 @@
 ﻿using AipgOmniworker.OmniController;
 using Microsoft.AspNetCore.Components;
+using Microsoft.JSInterop;
 
 namespace AipgOmniworker.Components.Pages;
 
@@ -34,10 +35,15 @@ public partial class Home
     }
 
     public InstanceConfig[]? InstanceConfigs { get; protected set; }
-    
+    public string MainTextAreaId { get; set; } = "mainTextArea";
+    public string TextWorkerTextAreaId { get; set; } = "textWorkerTextArea";
+    public string AphroditeTextAreaId { get; set; } = "aphroditeTextArea";
+    public string ImageWorkerTextAreaId { get; set; } = "imageWorkerTextArea";
+
     private int _selectedInstanceId = -1;
     private Instance? _selectedInstance;
     private SemaphoreSlim _changeInstanceSemaphore = new(1, 1);
+    private bool _isFirstRender = true;
 
     protected override async Task OnInitializedAsync()
     {
@@ -60,10 +66,55 @@ public partial class Home
             Logger.LogError(e, "Failed to load user config");
         }
     }
-
-    private void OnOmniControllerStateChanged(object? sender, EventArgs e)
+    
+    // This is called after the component has rendered on the client side
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        InvokeAsync(StateHasChanged);
+        if (firstRender)
+        {
+            _isFirstRender = false;
+            // Any logic you need to run after the first render, if necessary
+        }
+    }
+    
+    private async void OnOmniControllerStateChanged(object? sender, EventArgs e)
+    {
+        await OnOmniworkerStateChangedAsync();
+    }
+    
+    private async Task OnOmniworkerStateChangedAsync()
+    {
+        if (_isFirstRender)
+        {
+            return;
+        }
+        
+        var isMainAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", MainTextAreaId);
+        var isTextWorkerAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", TextWorkerTextAreaId);
+        var isAphroditeWorkerAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", AphroditeTextAreaId);
+        var isImageWorkerAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", ImageWorkerTextAreaId);
+        
+        await InvokeAsync(StateHasChanged);
+        
+        if (isMainAtBottom)
+        {
+            await JS.InvokeVoidAsync("scrollToBottom", MainTextAreaId);
+        }
+
+        if (isTextWorkerAtBottom)
+        {
+            await JS.InvokeVoidAsync("scrollToBottom", TextWorkerTextAreaId);
+        }
+
+        if (isAphroditeWorkerAtBottom)
+        {
+            await JS.InvokeVoidAsync("scrollToBottom", AphroditeTextAreaId);
+        }
+        
+        if (isImageWorkerAtBottom)
+        {
+            await JS.InvokeVoidAsync("scrollToBottom", ImageWorkerTextAreaId);
+        }
     }
     
     private async void OnSelectedInstanceChangedNonAsync()
@@ -173,6 +224,16 @@ public partial class Home
 
     private async Task StartWorkers()
     {
+        if (!await Save())
+        {
+            return;
+        }
+        
+        await _selectedInstance.OmniControllerMain.SaveAndRestart();
+    }
+    
+    private async Task<bool> Save()
+    {
         if (_selectedInstance == null)
         {
             throw new InvalidOperationException("Selected instance is null");
@@ -182,7 +243,7 @@ public partial class Home
             && string.IsNullOrWhiteSpace(TextModelName))
         {
             _selectedInstance.OmniControllerMain.Output.Add("Text Model Name is required!");
-            return;
+            return false;
         }
         
         if (_selectedInstance.Config.WorkerType == WorkerType.Auto || _selectedInstance.Config.WorkerType == WorkerType.Image)
@@ -190,38 +251,38 @@ public partial class Home
             if (AdditionalImageModelNames == null || AdditionalImageModelNames.Count == 0)
             {
                 _selectedInstance.OmniControllerMain.Output.Add("At least one Image Model Name is required!");
-                return;
+                return false;
             }
 
             if (AdditionalImageModelNames.Any(string.IsNullOrWhiteSpace))
             {
                 _selectedInstance.OmniControllerMain.Output.Add("Some Image Model Names entries are empty!");
-                return;
+                return false;
             }
         }
 
         if (string.IsNullOrWhiteSpace(GridApiKey))
         {
             _selectedInstance.OmniControllerMain.Output.Add("Grid API Key is required!");
-            return;
+            return false;
         }
 
         if (string.IsNullOrWhiteSpace(WorkerName))
         {
             _selectedInstance.OmniControllerMain.Output.Add("Worker Name is required!");
-            return;
+            return false;
         }
 
         if (DeviceType == DeviceType.CPU && WorkerType != WorkerType.Image)
         {
             _selectedInstance.OmniControllerMain.Output.Add("CPU is only supported for Image Worker.");
-            return;
+            return false;
         }
 
         if (string.IsNullOrWhiteSpace(DevicesIds))
         {
             _selectedInstance.OmniControllerMain.Output.Add("Devices IDs are required!");
-            return;
+            return false;
         }
         
         if(!DevicesIdsParser.TryParse(DevicesIds, out _))
@@ -230,13 +291,13 @@ public partial class Home
                 """
                 Invalid Devices IDs! Valid examples: "0", "0,1", "1,2,3", etc.
                 """);
-            return;
+            return false;
         }
 
         await SaveUserConfig();
         await SaveWorkerConfig(true);
         await _selectedInstance.OmniControllerMain.ApplyUserConfigsToWorkers();
-        await _selectedInstance.OmniControllerMain.SaveAndRestart();
+        return true;
     }
 
     private async Task StopWorkers()
