@@ -21,7 +21,7 @@ RUN dotnet_version=8.0.7 \
 FROM alpindale/aphrodite-engine AS base
 
 USER root
-RUN apt-get -y update && apt-get install -y libicu-dev wget libgl1 libjemalloc2 dos2unix
+RUN apt-get -y update && apt-get install -y libicu-dev wget libgl1 libjemalloc2 dos2unix curl
 
 # Image Worker
 
@@ -61,6 +61,11 @@ COPY grid-text-worker/ .
 EXPOSE 443
 
 #CMD ["python", "-s", "bridge_scribe.py"]
+
+# Silly Tavern
+
+WORKDIR /silly-tavern
+COPY silly-tavern/ .
 
 #USER $APP_UID
 WORKDIR /app

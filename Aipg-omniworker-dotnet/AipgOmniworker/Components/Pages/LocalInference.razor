@@ -1,0 +1,28 @@
+﻿@page "/LocalInference"
+<h3>LocalInference</h3>
+
+@if (IsInstalled())
+{
+    <button class="btn btn-primary" @onclick="Open">Open Silly Tavern</button>
+}
+else
+{
+    <button class="btn btn-primary" @onclick="Install">Install Silly Tavern</button>
+}
+
+@code {
+    private void Open()
+    {
+        throw new NotImplementedException();
+    }
+
+    private Task Install()
+    {
+        throw new NotImplementedException();
+    }
+
+    private bool IsInstalled()
+    {
+        throw new NotImplementedException();
+    }
+}
