@@ -239,6 +239,8 @@ public partial class Home
             throw new InvalidOperationException("Selected instance is null");
         }
         
+        _selectedInstance.OmniControllerMain.Output.Add("Saving configuration...");
+        
         if ((_selectedInstance.Config.WorkerType == WorkerType.Auto || _selectedInstance.Config.WorkerType == WorkerType.Text)
             && string.IsNullOrWhiteSpace(TextModelName))
         {
@@ -297,6 +299,7 @@ public partial class Home
         await SaveUserConfig();
         await SaveWorkerConfig(true);
         await _selectedInstance.OmniControllerMain.ApplyUserConfigsToWorkers();
+        _selectedInstance.OmniControllerMain.Output.Add("Saved!");
         return true;
     }
 
