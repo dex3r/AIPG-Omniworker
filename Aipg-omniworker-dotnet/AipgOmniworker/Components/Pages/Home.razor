@@ -146,8 +146,8 @@ Required for some models, like Llamas. Create HuggingFace account and get one fr
         if (!textarea) return false;
 
         // Check if the user is at the bottom
-        var tolerance = 10;
-        var isAtBottom = (textarea.scrollHeight - textarea.scrollTop - textarea.clientHeight) <= tolerance;
+        //var tolerance = 10;
+        var isAtBottom = (textarea.scrollHeight - textarea.scrollTop - textarea.clientHeight) == 0;
 
          return isAtBottom;
     };
@@ -157,6 +157,15 @@ Required for some models, like Llamas. Create HuggingFace account and get one fr
         if (textarea) {
             textarea.scrollTop = textarea.scrollHeight;
         }
+    };
+
+    window.scrollToBottomOnLoad = (textareaId) => {
+        window.addEventListener('load', () => {
+            var textarea = document.getElementById(textareaId);
+            if (textarea) {
+                textarea.scrollTop = textarea.scrollHeight;
+            }
+        });
     };
 </script>
 

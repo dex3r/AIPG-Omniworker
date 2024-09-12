@@ -289,6 +289,10 @@ public class OmniControllerMain
 
             await WatchdogMethodUnsafe(workerType, stoppingToken);
         }
+        catch (Exception e) when (e is TaskCanceledException || e is OperationCanceledException)
+        {
+            AddOutput("Watchdog method was cancelled");
+        }
         catch (Exception e)
         {
             AddOutput("Exception in Watchdog method:");

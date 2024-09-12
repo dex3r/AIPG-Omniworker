@@ -4,7 +4,7 @@ using Microsoft.JSInterop;
 
 namespace AipgOmniworker.Components.Pages;
 
-public partial class Home
+public partial class Home : IAsyncDisposable
 {
     private string? GridApiKey { get; set; }
     private string? WorkerName { get; set; }
@@ -44,6 +44,9 @@ public partial class Home
     private Instance? _selectedInstance;
     private SemaphoreSlim _changeInstanceSemaphore = new(1, 1);
     private bool _isFirstRender = true;
+    private bool _disposed = false;
+    private CancellationTokenSource _disposeCancellationTokenSource = new();
+    private bool _forceScrollToBottom;
 
     protected override async Task OnInitializedAsync()
     {
@@ -73,50 +76,99 @@ public partial class Home
         if (firstRender)
         {
             _isFirstRender = false;
-            // Any logic you need to run after the first render, if necessary
+            await ScrollAllToBottom();
         }
     }
-    
+
+    private async Task ScrollAllToBottom()
+    {
+        await JS.InvokeVoidAsync("scrollToBottom", _disposeCancellationTokenSource.Token, MainTextAreaId);
+        await JS.InvokeVoidAsync("scrollToBottom", _disposeCancellationTokenSource.Token, TextWorkerTextAreaId);
+        await JS.InvokeVoidAsync("scrollToBottom", _disposeCancellationTokenSource.Token, AphroditeTextAreaId);
+        await JS.InvokeVoidAsync("scrollToBottom", _disposeCancellationTokenSource.Token, ImageWorkerTextAreaId);
+    }
+
     private async void OnOmniControllerStateChanged(object? sender, EventArgs e)
     {
-        await OnOmniworkerStateChangedAsync();
+        try
+        {
+            await OnOmniworkerStateChangedAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Handle disconnection, e.g., log it or update component state
+            Logger.LogInformation("JS runtime disconnected");
+        }
+        catch (TaskCanceledException)
+        {
+            // Handle task cancellation, which can occur when the connection is lost
+            Logger.LogInformation("Task cancelled, likely due to disconnection");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to handle OmniController state change");
+        }
     }
     
     private async Task OnOmniworkerStateChangedAsync()
     {
-        if (_isFirstRender)
+        if (_isFirstRender || _disposed)
         {
             return;
         }
         
-        var isMainAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", MainTextAreaId);
-        var isTextWorkerAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", TextWorkerTextAreaId);
-        var isAphroditeWorkerAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", AphroditeTextAreaId);
-        var isImageWorkerAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", ImageWorkerTextAreaId);
+        var isMainAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", _disposeCancellationTokenSource.Token, MainTextAreaId);
+        var isTextWorkerAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", _disposeCancellationTokenSource.Token, TextWorkerTextAreaId);
+        var isAphroditeWorkerAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", _disposeCancellationTokenSource.Token, AphroditeTextAreaId);
+        var isImageWorkerAtBottom = await JS.InvokeAsync<bool>("scrollTextAreaIfNeeded", _disposeCancellationTokenSource.Token, ImageWorkerTextAreaId);
         
         await InvokeAsync(StateHasChanged);
+
+        if (_disposeCancellationTokenSource.IsCancellationRequested)
+        {
+            return;
+        }
+
+        if(_forceScrollToBottom)
+        {
+            await ScrollAllToBottom();
+            return;
+        }
         
         if (isMainAtBottom)
         {
-            await JS.InvokeVoidAsync("scrollToBottom", MainTextAreaId);
+            await JS.InvokeVoidAsync("scrollToBottom", _disposeCancellationTokenSource.Token, MainTextAreaId);
         }
 
         if (isTextWorkerAtBottom)
         {
-            await JS.InvokeVoidAsync("scrollToBottom", TextWorkerTextAreaId);
+            await JS.InvokeVoidAsync("scrollToBottom", _disposeCancellationTokenSource.Token, TextWorkerTextAreaId);
         }
 
         if (isAphroditeWorkerAtBottom)
         {
-            await JS.InvokeVoidAsync("scrollToBottom", AphroditeTextAreaId);
+            await JS.InvokeVoidAsync("scrollToBottom", _disposeCancellationTokenSource.Token, AphroditeTextAreaId);
         }
         
         if (isImageWorkerAtBottom)
         {
-            await JS.InvokeVoidAsync("scrollToBottom", ImageWorkerTextAreaId);
+            await JS.InvokeVoidAsync("scrollToBottom", _disposeCancellationTokenSource.Token, ImageWorkerTextAreaId);
         }
     }
-    
+
+    ValueTask IAsyncDisposable.DisposeAsync()
+    {
+        _disposed = true;
+        _disposeCancellationTokenSource.Cancel();
+
+        if (_selectedInstance != null)
+        {
+            _selectedInstance.OmniControllerMain.StateChangedEvent -= OnOmniControllerStateChanged;
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
     private async void OnSelectedInstanceChangedNonAsync()
     {
         try
@@ -134,7 +186,12 @@ public partial class Home
         try
         {
             await _changeInstanceSemaphore.WaitAsync();
-            
+
+            if (_disposeCancellationTokenSource.IsCancellationRequested)
+            {
+                return;
+            }
+
             if (_selectedInstance != null)
             {
                 _selectedInstance.OmniControllerMain.StateChangedEvent -= OnOmniControllerStateChanged;
@@ -142,6 +199,12 @@ public partial class Home
             }
 
             _selectedInstance = await InstancesManager.GetInstance(SelectedInstanceId);
+
+            if (_disposeCancellationTokenSource.IsCancellationRequested)
+            {
+                return;
+            }
+
             _selectedInstance.OmniControllerMain.StateChangedEvent += OnOmniControllerStateChanged;
         
             WorkerType = _selectedInstance.Config.WorkerType;
@@ -149,7 +212,8 @@ public partial class Home
             AdditionalImageModelNames = _selectedInstance.Config.ImageWorkerModelsNames?.ToList() ?? new();
             DeviceType = _selectedInstance.Config.DeviceType;
             DevicesIds = _selectedInstance.Config.Devices;
-            
+            _forceScrollToBottom = true; // Since new logs will load, we need to scroll to the bottom
+
             StateHasChanged();
         }
         finally
@@ -229,7 +293,7 @@ public partial class Home
             return;
         }
         
-        await _selectedInstance.OmniControllerMain.SaveAndRestart();
+        await _selectedInstance!.OmniControllerMain.SaveAndRestart();
     }
     
     private async Task<bool> Save()
