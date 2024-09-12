@@ -214,6 +214,7 @@ public partial class Home : IAsyncDisposable
             DeviceType = _selectedInstance.Config.DeviceType;
             DevicesIds = _selectedInstance.Config.Devices;
             _forceScrollToBottom = true; // Since new logs will load, we need to scroll to the bottom
+            await OnOmniworkerStateChangedAsync();
 
             StateHasChanged();
         }
