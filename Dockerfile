@@ -20,17 +20,33 @@ RUN dotnet_version=8.0.7 \
 # Aphroride image
 FROM alpindale/aphrodite-engine AS base
 
+USER root
+RUN apt-get -y update && apt-get install -y libicu-dev wget libgl1 libjemalloc2 dos2unix
+
+# Image Worker
+
+WORKDIR /image-worker
+
+# This takes minutes, so it has to be as high as possible in the Dockerfile to be cached as frequently as possible
+COPY image-worker/update-runtime.sh image-worker/environment.yaml image-worker/requirements.txt .
+RUN /image-worker/update-runtime.sh
+
+COPY image-worker/ .
+
+# .sh scripts fail in linux when end of lines are not set to LF
+# This can be solved on git on per-checkout basis, but this is much safer
+RUN find . -type f -name "*.sh" -exec dos2unix {} \+;
+
+# Dotnet app
 # ASP.NET Core version
 ENV ASPNET_VERSION=8.0.7
 
-USER root
+WORKDIR /
+
 COPY --from=installer ["/dotnet", "/usr/share/dotnet"]
 COPY --from=installer ["/shared/Microsoft.AspNetCore.App", "/usr/share/dotnet/shared/Microsoft.AspNetCore.App"]
 
 RUN ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet
-
-RUN apt-get -y update
-RUN apt-get -y install libicu-dev
 
 # Text Worker
 
@@ -45,24 +61,6 @@ COPY grid-text-worker/ .
 EXPOSE 443
 
 #CMD ["python", "-s", "bridge_scribe.py"]
-
-# Image Worker
-
-WORKDIR /image-worker
-
-COPY image-worker/ .
-RUN chmod +x /image-worker/update-and-run.sh
-RUN chmod +x /image-worker/update-runtime.sh
-RUN apt-get -y install wget
-RUN apt-get -y install libgl1
-RUN apt-get -y install libjemalloc2
-
-# .sh scripts fail in linux when end of lines are not set to LF
-# This can be solved on git on per-checkout basis, but this is much safer
-RUN apt-get -y install dos2unix
-RUN find . -type f -name "*.sh" -exec dos2unix {} \+;
-
-RUN /image-worker/update-runtime.sh
 
 #USER $APP_UID
 WORKDIR /app
