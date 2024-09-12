@@ -145,10 +145,7 @@ Required for some models, like Llamas. Create HuggingFace account and get one fr
         var textarea = document.getElementById(textareaId);
         if (!textarea) return false;
 
-        // Check if the user is at the bottom
-        //var tolerance = 10;
-        var isAtBottom = (textarea.scrollHeight - textarea.scrollTop - textarea.clientHeight) == 0;
-
+        var isAtBottom = textarea.scrollHeight - textarea.clientHeight <= textarea.scrollTop + 1;
          return isAtBottom;
     };
 

@@ -131,6 +131,7 @@ public partial class Home : IAsyncDisposable
 
         if(_forceScrollToBottom)
         {
+            _forceScrollToBottom = false;
             await ScrollAllToBottom();
             return;
         }
